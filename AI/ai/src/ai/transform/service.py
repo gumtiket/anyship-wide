@@ -27,7 +27,7 @@ class PatchResponse(OutputModel):
 
 
 def _failure_code(error: ValueError | RuntimeError | SyntaxError) -> str:
-    # Only fixed validator codes may enter feedback/warnings; never include source/SDK text.
+    # 피드백·경고에는 고정된 검증 코드만 넣는다. 소스나 SDK 텍스트는 넣지 않는다.
     code = str(error) if isinstance(error, ValueError) else "llm_patch_failed"
     allowed = {
         "patch_path_not_allowed",
@@ -278,7 +278,7 @@ def llm_patch(
     *,
     reference_sources: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], list[str], int, list[WarningItem]]:
-    """Initial attempt + two regenerations, then one attempt per target. Never executes apps."""
+    """첫 시도와 재생성 2회, 그 뒤 대상마다 1회씩 시도한다. 앱은 실행하지 않는다."""
     eligible = [
         v
         for v in targets

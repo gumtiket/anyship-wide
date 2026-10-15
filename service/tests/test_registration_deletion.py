@@ -1,4 +1,4 @@
-"""Delete only Service registrations; preserve remote resources and active work."""
+"""서비스의 등록 정보만 지운다. 원격 자원과 진행 중인 작업은 보존한다."""
 
 import time
 import uuid
@@ -34,7 +34,7 @@ def test_delete_environment_all_inactive_states_without_aws(aws_web, state):
                 stored.expires_at = int(time.time()) - 1
             session.commit()
     calls = len(adapter.calls)
-    # Removing a registration needs neither AWS configuration nor an adapter.
+    # 등록 삭제에는 AWS 설정도 어댑터도 필요 없다.
     offline = create_app(
         replace(settings, aws_template_url="", aws_service_role_arn=""), FakeGitHub()
     )
@@ -90,7 +90,7 @@ def test_deletion_blocked_during_check_and_late_result_cannot_restore_environmen
 
     def finish_after_deletion():
         assert client.delete(endpoint, headers=headers).status_code == 409
-        # A timed-out check may still finish after its registration is removed.
+        # 시간이 초과된 확인 작업은 등록이 삭제된 뒤에도 끝날 수 있다.
         with app.state.sessions() as session:
             session.execute(
                 update(AwsEnvironment)
@@ -135,7 +135,7 @@ def test_delete_repository_cleans_local_history_and_preserves_github(real, publi
         session.commit()
         retained_id, demo_id = retained.id, demo.id
     calls, refs, prs = len(remote.calls), dict(remote.refs), list(remote.prs)
-    remote.revoked = True  # Local deletion must work after GitHub access is revoked.
+    remote.revoked = True  # GitHub 접근 권한이 철회된 뒤에도 로컬 삭제는 되어야 한다.
     response = client.delete(endpoint, headers=headers)
     assert response.status_code == 204 and response.content == b""
     assert client.get(endpoint).status_code == 404
@@ -148,7 +148,7 @@ def test_delete_repository_cleans_local_history_and_preserves_github(real, publi
         assert session.get(CodeChange, change["id"]) is None
         assert session.get(DemoChange, demo_id) is None
     remote.revoked = False
-    # The uniqueness constraint is released, so the original repository can be reconnected.
+    # 고유 제약이 풀렸으므로 원래 저장소를 다시 연결할 수 있다.
     response = client.post(
         "/api/projects",
         json={"repository_url": f"https://github.com/{NAME}", "branch": "main"},

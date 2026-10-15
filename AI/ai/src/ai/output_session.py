@@ -1,4 +1,4 @@
-"""Request isolation: new output directory, atomic publication, and owned temp cleanup."""
+"""요청 격리: 새 출력 디렉터리, 원자적 게시, 소유한 임시 파일 정리."""
 
 from __future__ import annotations
 
@@ -69,10 +69,10 @@ def isolated_output(function: Callable[..., AnalysisResult]) -> Callable[..., An
                 raise ValueError("output_not_empty: 요청마다 새 출력 디렉터리를 사용하세요.")
             with TemporaryDirectory(prefix=".bronze-analysis-", dir=output.parent) as temporary:
                 result = function(repo_path, **{**kwargs, "out_dir": temporary})
-                # All seven results and optional trace/provenance files publish together.
+                # 7종 결과와 선택적 trace·출처 파일을 한꺼번에 게시한다.
                 result.output_files = {name: str(output / name) for name in result.output_files}
                 if output.exists():
-                    output.rmdir()  # Only an empty, caller-selected directory is replaceable.
+                    output.rmdir()  # 호출한 쪽이 고른 빈 디렉터리만 교체할 수 있다.
                 os.rename(temporary, output)
                 published = True
             return result

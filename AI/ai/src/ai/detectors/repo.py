@@ -28,7 +28,7 @@ EXCLUDED_DIRS = frozenset(
 
 
 class RepoView:
-    """Bounded, deterministic read-only view. Never imports repository modules."""
+    """크기를 제한한 결정적 읽기 전용 보기. 저장소 모듈을 import하지 않는다."""
 
     def __init__(self, root: str | Path, *, max_files: int = 2000, max_bytes: int = 524288) -> None:
         self.root = Path(root).resolve()
@@ -89,11 +89,11 @@ class RepoView:
                         ".log",
                     )
                 ):
-                    continue  # Runtime data is neither source input nor a proposed build input.
+                    continue  # 실행 중 생기는 데이터는 소스 입력도, 제안할 빌드 입력도 아니다.
                 if path.is_symlink() or ignored(path) or name.lower().startswith(".env"):
                     continue
                 if name == "VIOLATIONS.json" or name.endswith(".expected.json"):
-                    continue  # Ground truth is not an analysis input.
+                    continue  # 정답 데이터는 분석 입력이 아니다.
                 candidates += 1
                 if candidates > max_files:
                     self.warnings.append(

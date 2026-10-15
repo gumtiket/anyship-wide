@@ -1,7 +1,7 @@
-"""Materialize initial LLM hunks by unique context, then emit a canonical Git diff.
+"""LLM이 처음 낸 hunk를 고유한 문맥으로 적용한 뒤, 정규화된 Git diff를 만든다.
 
-This fixes transport mechanics, not approval: the caller must still validate
-secrets, semantics, compile, signals, and the selected AST scope on the original.
+이 모듈은 전달 형식만 바로잡을 뿐 승인하지 않는다. 호출한 쪽이 원본을 기준으로
+비밀, 의미, 컴파일, 신호, 선택된 AST 범위를 따로 검증해야 한다.
 """
 
 import re
@@ -15,7 +15,7 @@ HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@.*$")
 
 def _hunks(diff: str, allowed: set[str]) -> dict[str, list[tuple[list[str], list[str]]]]:
     lines = diff.splitlines(keepends=True)
-    # Only exact allowed names can gain a prefix; traversal/rename/delete remain rejected.
+    # 허용된 이름과 정확히 같을 때만 접두사를 붙인다. 경로 탈출·이름 변경·삭제는 거부한다.
     for index, line in enumerate(lines):
         if line.startswith(("--- ", "+++ ")):
             name = line[4:].rstrip("\r\n")
@@ -62,7 +62,7 @@ def _hunks(diff: str, allowed: set[str]) -> dict[str, list[tuple[list[str], list
                 previous = None
             elif line and line[0] in {" ", "-", "+"}:
                 previous = line[0]
-                # A missing final diff newline is not a source EOF marker.
+                # diff 끝에 줄바꿈이 없다고 소스 EOF 표시가 되는 것은 아니다.
                 content = line[1:] if line.endswith("\n") else line[1:] + "\n"
                 if previous in {" ", "-"}:
                     old.append(content)
@@ -118,7 +118,7 @@ def _project(original: str, visible: str, updated: str) -> str:
         None, masked, after, autojunk=False
     ).get_opcodes():
         if kind == "equal":
-            # Keep the original bytes of unchanged lines; never reverse a marker value.
+            # 바뀌지 않은 줄은 원래 바이트를 유지하고, 표시 값을 거꾸로 되돌리지 않는다.
             result.extend(raw[start:end])
         else:
             replacement = after[new_start:new_end]

@@ -1,4 +1,4 @@
-"""Independent inputs for the review defects; never execute inspected app code."""
+"""리뷰에서 찾은 결함마다 독립된 입력을 쓴다. 검사 대상 앱 코드는 실행하지 않는다."""
 
 import json
 import shutil
@@ -22,7 +22,7 @@ from ai.transform.workspace import Workspace, source_files
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFIX = "from fastapi import FastAPI\napp = FastAPI()\n"
-# Fabricated; outside the explicitly allowed sample sentinel exemption.
+# 꾸며 낸 값이며, 명시적으로 허용한 샘플 표식 예외에 해당하지 않는다.
 REVIEW_SECRET = "dummy-review-secret-do-not-use"
 
 

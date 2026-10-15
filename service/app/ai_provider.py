@@ -1,4 +1,4 @@
-"""Execute bronze-ai outside the web process with a small explicit environment."""
+"""bronze-ai를 웹 프로세스 밖에서, 최소한으로 명시한 환경 변수만으로 실행한다."""
 
 import json
 import os

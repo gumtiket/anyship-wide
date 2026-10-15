@@ -6,7 +6,7 @@ ENV_NAME = r"^[A-Z][A-Z0-9_]{1,63}$"
 APP_NAME = r"^[a-z][a-z0-9-]{1,29}[a-z0-9]$"
 MAX_ENV_BYTES = 4096
 MAX_ENV_VALUE_CHARS = 1024
-# PORT comes from spec.port. Platform/process controls must not come from app settings.
+# PORT는 spec.port에서 온다. 플랫폼·프로세스 제어 값은 앱 설정에서 오면 안 된다.
 DENIED_NAMES = frozenset(
     {
         "PORT",
@@ -52,7 +52,10 @@ def allowed_value(value: str) -> bool:
 
 
 def known_env_bytes(values: dict[str, str]) -> int:
-    """Known UTF-8 key/value bytes only. C must recheck after injecting all secrets and URLs."""
+    """알려진 UTF-8 키·값 바이트만 센다.
+
+    배포 쪽은 모든 비밀과 URL을 주입한 뒤 다시 확인해야 한다.
+    """
     return sum(len(key.encode()) + len(value.encode()) for key, value in values.items())
 
 

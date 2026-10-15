@@ -1,4 +1,4 @@
-"""Deterministic local-only stand-in for AI modification. Never contacts GitHub."""
+"""AI 수정을 대신하는 결정적인 로컬 전용 대체물. GitHub에 접속하지 않는다."""
 
 import ast
 import hashlib
@@ -28,7 +28,7 @@ def workspace(root: Path, change_id: str) -> Path:
 
 
 def git(path, *args):
-    # Don't inherit repository, credentials, hooks, filters or signing configuration.
+    # 저장소·자격 증명·hook·filter·서명 설정을 물려받지 않는다.
     env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0")
     try:
@@ -81,7 +81,7 @@ def apply(root, change_id, content):
         raise DemoFailure("데모 파일 경로가 올바르지 않습니다.")
     if content != CONTENT:
         raise DemoFailure("데모 변경 내용이 예시와 일치하지 않습니다.")
-    ast.parse(content)  # Syntax validation only; never execute even this fixture.
+    ast.parse(content)  # 문법 검사만 한다. 이 고정 파일도 실행하지 않는다.
     target.write_text(content, encoding="utf-8", newline="\n")
     git(path, "add", "--", FILE_NAME)
     diff = git(path, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--", FILE_NAME)
@@ -98,7 +98,7 @@ def commit(root, change_id, expected_diff, expected_content):
         raise DemoFailure("데모 작업 브랜치가 일치하지 않습니다.")
     if (path / FILE_NAME).read_text(encoding="utf-8") != expected_content:
         raise DemoFailure("검토 이후 파일 내용이 변경되었습니다.")
-    # Compare the full stage, so unreviewed staged files cannot enter the commit.
+    # 스테이지 전체를 비교해 검토하지 않은 파일이 커밋에 들어가지 못하게 한다.
     staged = git(path, "diff", "--cached", "--no-ext-diff", "--no-textconv")
     if staged != expected_diff:
         raise DemoFailure("검토 이후 변경 내용이 달라졌습니다. 다시 확인해 주세요.")

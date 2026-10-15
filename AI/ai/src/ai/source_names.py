@@ -1,4 +1,4 @@
-"""Resolve static Python import aliases without importing the inspected application."""
+"""검사 대상 앱을 import하지 않고 정적인 Python import 별칭을 해석한다."""
 
 import ast
 

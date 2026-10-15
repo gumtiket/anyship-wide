@@ -1,4 +1,4 @@
-"""Refresh explicit recorded fixtures, or review/accept their offline golden projection."""
+"""명시한 녹화 고정 데이터를 갱신하거나, 오프라인 골든 투영을 검토·승인한다."""
 
 import argparse
 import json

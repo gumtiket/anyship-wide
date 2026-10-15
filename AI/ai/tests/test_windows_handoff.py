@@ -1,4 +1,4 @@
-"""Offline service handoff preserves LF/CRLF bytes on every host."""
+"""오프라인 서비스 전달이 모든 호스트에서 LF/CRLF 바이트를 보존한다."""
 
 import subprocess
 import sys

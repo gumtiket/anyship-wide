@@ -1,4 +1,4 @@
-"""Optional first-party transport; SDK credentials never enter our output models."""
+"""선택 설치하는 Anthropic 직접 전송. SDK 자격 증명은 출력 모델에 들어가지 않는다."""
 
 import importlib
 import math
@@ -50,7 +50,7 @@ def response_model(value: Any) -> str:
 
 
 def safe_usage(value: Any) -> dict[str, Any]:
-    """Whitelist numeric usage, including cache fields; omit free-form SDK metadata."""
+    """캐시 필드를 포함한 숫자 사용량만 허용 목록으로 남기고, 자유 형식 SDK 메타데이터는 뺀다."""
     usage = {name: token_count(field(value, name, 0)) for name in TOKEN_FIELDS}
     cache = field(value, "cache_creation")
     if cache is not None:
@@ -78,7 +78,7 @@ def safe_usage(value: Any) -> dict[str, Any]:
 
 
 def safe_usage_counts(value: Any) -> dict[str, Any]:
-    # Iterations have the same cache/token fields, without recursive iterations.
+    # 반복(iteration)도 같은 캐시·토큰 필드를 가지며, 반복이 중첩되지는 않는다.
     return safe_usage(
         {name: field(value, name, 0) for name in TOKEN_FIELDS}
         | {"cache_creation": field(value, "cache_creation")}
@@ -171,8 +171,8 @@ class AnthropicClient(ValidatingClient):
 
     @staticmethod
     def _error(error: Exception, transmissions: int) -> tuple[AnthropicCallError, bool]:
-        # Match the SDK's public exception hierarchy without importing the optional
-        # SDK for injected fake clients. Timeout is a subclass of connection error.
+        # 주입된 가짜 클라이언트를 위해 선택 설치 SDK를 import하지 않고, SDK의 공개 예외
+        # 계층에 맞춘다. Timeout은 연결 오류의 하위 클래스다.
         names = {kind.__name__ for kind in type(error).__mro__}
         codes = (
             "APITimeoutError",
@@ -232,8 +232,8 @@ class AnthropicClient(ValidatingClient):
             if not any(
                 field(self.client, name) for name in ("api_key", "auth_token", "credentials")
             ):
-                # The SDK resolves env/profile credentials at construction, but
-                # otherwise raises during request preparation before any send.
+                # SDK는 생성 시점에 환경 변수·프로필 자격 증명을 찾고, 찾지 못하면
+                # 요청을 보내기 전, 요청 준비 단계에서 오류를 낸다.
                 self.client = None
                 raise AnthropicCallError("MissingCredentials") from None
         parameters = self.request_parameters(tier)
@@ -250,7 +250,7 @@ class AnthropicClient(ValidatingClient):
             except Exception as error:
                 safe, retry = self._error(error, attempt + 1)
                 delay = self._delay(error, attempt) if retry else 0
-                # Long Retry-After is returned to the caller; never retry too early.
+                # 긴 Retry-After는 호출한 쪽에 돌려준다. 너무 일찍 재시도하지 않는다.
                 if not retry or attempt + 1 == self.transport_attempts or delay > 60:
                     raise safe from None
                 self.sleep(delay)
@@ -291,7 +291,7 @@ class AnthropicClient(ValidatingClient):
             text = "".join(
                 field(block, "text") for block in content if field(block, "type") == "text"
             )
-            # Partial refused output must never be consumed or persisted as a result.
+            # 거부로 중단된 일부 출력은 결과로 쓰거나 저장하면 안 된다.
             if stop_reason == "refusal":
                 text = ""
             return LLMResult(

@@ -1,4 +1,4 @@
-"""Restrict initial LLM safe edits to rule-selected AST nodes, without running app code."""
+"""앱 코드를 실행하지 않고, LLM의 첫 안전 수정을 규칙이 고른 AST 노드로 제한한다."""
 
 import ast
 import re
@@ -15,7 +15,7 @@ from ai.source_names import aliases, qualified
 def rebase_targets(
     reference: dict[str, str], current: dict[str, str], targets: list[Violation]
 ) -> list[Violation]:
-    """Keep IDs, but locate unchanged lines after templates/earlier accepted patches."""
+    """ID는 유지하되, 템플릿과 앞서 수락된 패치를 적용한 뒤 바뀌지 않은 줄의 위치를 다시 찾는다."""
     mappings: dict[str, dict[int, int]] = {}
     result = []
     for target in targets:
@@ -274,7 +274,7 @@ def _equivalent(
 
 
 def _encoding(source: str) -> tuple[str, tuple[str, ...]]:
-    """Protect effective encoding and explicit cookies, including a new UTF-8 cookie."""
+    """실제로 적용되는 인코딩과 명시적 인코딩 선언(새 UTF-8 선언 포함)을 보호한다."""
     try:
         encoding, _ = tokenize.detect_encoding(BytesIO(source.encode("utf-8")).readline)
     except (SyntaxError, LookupError):
@@ -288,7 +288,7 @@ def _encoding(source: str) -> tuple[str, tuple[str, ...]]:
 
 
 def _outside_comments(source: str, nodes: list[ast.AST]) -> list[str]:
-    """Compare comment contents/order, allowing target-span edits and shifted line numbers."""
+    """대상 범위 안의 수정과 줄 번호 이동은 허용하면서 주석 내용과 순서를 비교한다."""
     ranges = [(node.lineno, node.end_lineno) for node in nodes]
     try:
         return [

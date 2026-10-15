@@ -46,7 +46,7 @@ def complete(client, **kwargs):
 
 
 def transport_error(name, status=None, retry_after=None):
-    # Public SDK exception contracts without making the optional SDK a test dependency.
+    # 선택 설치 SDK를 테스트 의존성으로 만들지 않고 공개 SDK 예외 계약을 흉내 낸다.
     error = type(name, (Exception,), {})("dummy-secret-do-not-use request body and headers")
     error.status_code = status
     error.request_id = "req_dummy"

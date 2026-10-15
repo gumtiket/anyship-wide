@@ -24,7 +24,7 @@ TRANSIENT_CODES = frozenset(
 
 
 def classify_denial(message: str) -> dict[str, Any]:
-    """Only fixed reason flags/action names; never return the SDK message or credentials."""
+    """고정된 사유 플래그와 동작 이름만 돌려준다. SDK 메시지나 자격 증명은 돌려주지 않는다."""
     text = message.lower()
     return {
         "reported_actions": sorted(
@@ -78,7 +78,7 @@ class BedrockClient(ValidatingClient):
         if max_tokens < 1:
             raise ValueError("max_tokens는 양수여야 합니다.")
         if tracker is None:
-            # Editable source installation; no external project absolute paths.
+            # 편집 가능 설치(editable)한 소스 기준이며, 외부 프로젝트의 절대 경로는 쓰지 않는다.
             pricing_path = Path(__file__).resolve().parents[3] / "pricing.json"
             tracker = (
                 CostTracker.from_file(pricing_path) if pricing_path.is_file() else CostTracker()
@@ -96,13 +96,13 @@ class BedrockClient(ValidatingClient):
         self.max_tokens = max_tokens
 
     def request_parameters(self, tier: Tier) -> dict[str, Any]:
-        # IDs may be bare, regional/global profile IDs, or full resource ARNs.
+        # ID는 기본 ID, 리전·전역 추론 프로필 ID, 전체 리소스 ARN 중 하나일 수 있다.
         family = self.models[tier].rsplit("/", 1)[-1].rsplit(".", 1)[-1]
         inference: dict[str, Any] = {"maxTokens": self.max_tokens}
         request: dict[str, Any] = {"inferenceConfig": inference}
         if family in {"claude-sonnet-5-5", "claude-haiku-5-5"}:
-            # 5.5 rejects non-default sampling. This P2 workflow has no tool loop;
-            # avoid up-front thinking consuming the small check/JSON output budget.
+            # 5.5는 기본값이 아닌 샘플링 설정을 거부한다. 이 작업 흐름에는 도구 반복이 없으므로
+            # 사전 thinking이 작은 확인·JSON 출력 예산을 써 버리지 않게 한다.
             request["additionalModelRequestFields"] = {
                 "thinking": {
                     "type": "between_tools" if family == "claude-sonnet-5-5" else "disabled"
@@ -118,8 +118,8 @@ class BedrockClient(ValidatingClient):
         transmissions = 0
         try:
             if self.client is None:
-                # Login refresh creates a separate signin client. Give the session itself
-                # a region, not only the outer Bedrock client, when profiles omit region.
+                # 로그인 갱신은 별도의 signin 클라이언트를 만든다. 프로필에 리전이 없을 때를 위해
+                # 바깥 Bedrock 클라이언트뿐 아니라 세션 자체에도 리전을 지정한다.
                 session = boto3.Session(region_name=self.region)
                 self.client = session.client(
                     "bedrock-runtime",
@@ -151,7 +151,7 @@ class BedrockClient(ValidatingClient):
                         ) from None
                     self.sleep(2**attempt)
         except BotoCoreError as error:
-            # A timeout may have completed inference. Avoid blind paid-call retry.
+            # 시간 초과여도 추론은 끝났을 수 있다. 유료 호출을 무작정 재시도하지 않는다.
             raise BedrockCallError(type(error).__name__, transport_attempts=transmissions) from None
         try:
             usage = response["usage"]

@@ -142,7 +142,7 @@ class Settings:
 
     @property
     def aws_setup_issues(self):
-        # Expose only missing setting names, never role, template or credential values.
+        # 빠진 설정의 이름만 알려 주고, 역할·템플릿·자격 증명 값은 노출하지 않는다.
         required = {
             "template": self.aws_template_url,
             "service_role": self.aws_service_role_arn,

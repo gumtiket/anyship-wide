@@ -1,4 +1,4 @@
-"""Private subprocess entry point. No application imports or Docker gate execution."""
+"""비공개 하위 프로세스 진입점. 앱 모듈을 불러오지 않고 Docker 게이트도 실행하지 않는다."""
 
 import json
 import sys
@@ -36,8 +36,8 @@ def analyze(repo, output, request, log):
 
         client = AnthropicClient(schema_retries=1, transport_attempts=2)
 
-    # Bound total logical model calls as well as process wall time. Each client has
-    # at most two schema attempts and two transport attempts per logical call.
+    # 프로세스 실행 시간뿐 아니라 논리적 모델 호출 총수도 제한한다. 클라이언트마다
+    # 논리 호출 하나당 스키마 시도 최대 2회, 전송 시도 최대 2회다.
     if client is not None:
         original_complete, calls = client.complete, 0
 
@@ -97,7 +97,7 @@ def analyze(repo, output, request, log):
             if result.deploy_spec is not None:
                 for name in ("Dockerfile", "deploy-spec.yaml", ".dockerignore"):
                     changed[name] = (Path(output) / name).read_bytes().decode("utf-8")
-            # Removed/context lines are also visible in the review and PR.
+            # 삭제된 줄과 문맥 줄도 검토 화면과 PR에 그대로 보인다.
             if masker.contains_sensitive(make_diff(original, changed)):
                 raise ValueError("sensitive_diff")
             for name, content in sorted(changed.items()):
@@ -123,7 +123,7 @@ def main():
     request = json.loads(request_path.read_text(encoding="utf-8"))
 
     def log(stage, _message):
-        # Free-form engine/model messages can contain source or local paths.
+        # 엔진·모델의 자유 형식 메시지에는 소스나 로컬 경로가 들어 있을 수 있다.
         print(json.dumps({"stage": stage.value}, ensure_ascii=False), flush=True)
 
     try:

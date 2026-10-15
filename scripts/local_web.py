@@ -1,4 +1,4 @@
-"""Prepare local-only configuration without printing credentials; start a built UI."""
+"""자격 증명을 출력하지 않고 로컬 전용 설정을 준비한 뒤, 빌드된 화면으로 서버를 시작한다."""
 
 import argparse
 import os
@@ -49,7 +49,7 @@ def main():
         print("Enter these values locally: " + ", ".join(missing))
         print("AnyShip will show the connection setup screen until these values are configured.")
     env = os.environ.copy()
-    # A selected local profile is authoritative; no credentials appear in command arguments.
+    # 고른 로컬 프로필 값을 우선한다. 자격 증명은 명령 인자에 드러나지 않는다.
     env.update({key: value for key, value in values.items() if value is not None})
     if not (root / "frontend/dist/index.html").is_file():
         print("Frontend build missing. Run pnpm build in frontend first.")

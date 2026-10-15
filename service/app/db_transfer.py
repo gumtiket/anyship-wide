@@ -1,4 +1,4 @@
-"""Copy a stopped service's SQLite snapshot into an empty, migrated PostgreSQL DB."""
+"""멈춘 서비스의 SQLite 스냅숏을 마이그레이션만 적용한 빈 PostgreSQL DB로 복사한다."""
 
 import hashlib
 import json
@@ -34,7 +34,7 @@ def copy_sqlite_snapshot(source, target):
             != writer.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
         ):
             raise ValueError("Source and target migration versions must match.")
-        # Block concurrent writers for the entire copy and verification transaction.
+        # 복사와 검증 트랜잭션 내내 다른 쓰기를 막는다.
         names = ", ".join(target.dialect.identifier_preparer.quote(table.name) for table in tables)
         writer.execute(text(f"LOCK TABLE {names} IN EXCLUSIVE MODE"))
         if any(writer.scalar(select(func.count()).select_from(table)) for table in tables):

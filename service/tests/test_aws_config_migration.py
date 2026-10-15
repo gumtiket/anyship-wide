@@ -80,7 +80,7 @@ def test_upgrade_preserves_existing_data_and_matches_models(database_url):
                         expires_at=2,
                     )
                 )
-            session.commit()  # Multiple pending rows may have a NULL role_arn.
+            session.commit()  # 대기 중인 여러 행의 role_arn이 NULL일 수 있다.
         command.downgrade(config, "0004")
         assert "aws_environments" not in inspect(engine).get_table_names()
         with Session(engine) as session:

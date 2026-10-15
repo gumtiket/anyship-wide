@@ -358,7 +358,7 @@ def test_owner_and_csrf_and_unknown_transport_are_enforced(web):
     )
     assert bad.status_code == 422
     with web.sessions() as session:
-        # Use an existing different owner, satisfying the DB foreign key.
+        # DB 외래 키를 만족하도록 이미 있는 다른 소유자를 쓴다.
         from app.db import User
 
         session.add(User(id="someone-else", github_id=9988, login="other", name="other"))

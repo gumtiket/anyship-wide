@@ -1,4 +1,4 @@
-"""Stable regression projection; historical model text is not an independent holdout."""
+"""안정적인 회귀 비교용 투영. 과거 모델 출력은 독립된 검증용 데이터가 아니다."""
 
 import hashlib
 from pathlib import Path
@@ -11,7 +11,7 @@ def core_result(result: AnalysisResult) -> dict:
     dockerfile = Path(result.output_files["Dockerfile"]).read_text()
     diff = Path(result.output_files["changes.diff"]).read_text()
     spec = result.deploy_spec.model_dump(mode="json", exclude_none=True)
-    spec.pop("source", None)  # External provenance is not application behavior.
+    spec.pop("source", None)  # 외부 출처 정보는 앱 동작이 아니다.
     return {
         "support_grade": result.diagnosis.support_grade,
         "violations": sorted(v.id for v in result.diagnosis.violations if v.source == "rule"),

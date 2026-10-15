@@ -1,4 +1,4 @@
-"""User-owned connection drafts; GitHub redirects never establish access themselves."""
+"""사용자 소유 저장소 연결 초안. GitHub 리디렉트만으로는 접근 권한이 생기지 않는다."""
 
 import hashlib
 import secrets
@@ -26,7 +26,7 @@ def repository_name(url):
 
 
 def inspect_access(github, token, name, demo=False):
-    """Only report facts visible through this user's App token, including revocation."""
+    """이 사용자의 App 토큰으로 확인할 수 있는 사실(권한 철회 포함)만 알려 준다."""
     owner = name.split("/")[0].lower()
     matching = [i for i in github.installations(token) if i["account"]["login"].lower() == owner]
     if matching and all(i.get("suspended_at") for i in matching):
@@ -59,7 +59,7 @@ def inspect_access(github, token, name, demo=False):
                     "message": "AnyShip에 코드 변경과 PR 생성 권한 승인이 필요합니다. GitHub에서 요청된 권한을 확인해 주세요. 권한 요청이 보이지 않으면 서비스 관리자에게 문의해 주세요.",
                 }
             return {"status": "ready", "installation_id": installation["id"], "repository": repo}
-    # GitHub hides inaccessible private repositories; do not claim they do not exist.
+    # GitHub는 접근할 수 없는 비공개 저장소를 숨긴다. 존재하지 않는다고 단정하지 않는다.
     return {
         "status": "authorization_required",
         "message": "이 저장소에 접근할 수 없습니다. 주소가 맞는지 확인한 뒤 GitHub에서 이 저장소의 접근을 허용해 주세요. 조직 저장소는 관리자 승인이 필요할 수 있습니다.",
@@ -149,7 +149,7 @@ def router(settings, github, db, current, mutation, access_token):
     @routes.post("")
     def save(body: ConnectionInput, login=Depends(mutation), session=Depends(db)):
         name = repository_name(body.repository_url)
-        # Rotate the ID and invalidate prior install states even when the same URL is submitted.
+        # 같은 URL을 다시 제출해도 ID를 새로 만들고 이전 설치 상태를 무효화한다.
         session.execute(
             delete(RepositoryConnection).where(
                 RepositoryConnection.user_id == login.user_id,
@@ -220,7 +220,7 @@ def router(settings, github, db, current, mutation, access_token):
         session.commit()
         if consumed.rowcount != 1:
             raise HTTPException(409, "이미 확인한 연결 요청입니다. 접근 권한을 다시 확인해 주세요.")
-        # Never trust installation_id/setup_action from the redirect as proof of access.
+        # 리디렉트로 받은 installation_id/setup_action을 접근 권한의 증거로 믿지 않는다.
         return inspect(draft, login, session)
 
     @routes.delete("")

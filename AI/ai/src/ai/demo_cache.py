@@ -1,4 +1,4 @@
-"""Explicit replay of historical sample results; never authorizes deployment."""
+"""과거 샘플 결과를 명시적으로 재생한다. 배포를 승인하는 근거가 아니다."""
 
 import hashlib
 import json
@@ -134,7 +134,7 @@ def save_cache(
     payloads = {name: Path(result.output_files[name]).read_text() for name in NAMES}
     for text in payloads.values():
         assert_public(text)
-    # Relative file names only: portable snapshots contain no live host paths/context owner.
+    # 상대 파일 이름만 쓴다. 이식 가능한 스냅숏에는 실제 호스트 경로나 문맥 소유자가 없다.
     snapshot = result.model_dump(mode="json")
     snapshot["output_files"] = {name: name for name in NAMES}
     snapshot["build_context"] = None
@@ -180,7 +180,7 @@ def try_restore(
     delay_s: float = 0.01,
     sleep=time.sleep,
 ) -> AnalysisResult | None:
-    # Import at call time to retain the public pipeline's original output helpers.
+    # 공개 파이프라인의 원래 출력 함수를 그대로 쓰도록 호출 시점에 불러온다.
     from ai.pipeline import _write_output
 
     started = time.monotonic()
@@ -224,7 +224,7 @@ def try_restore(
         result = AnalysisResult.model_validate(manifest["result"])
         if result.gate_report.status != "passed" or result.gate_report.runner != "docker":
             raise ValueError("cache_gate_not_verified")
-        # Check serialized output models agree with the validated snapshot, not just hashes.
+        # 해시만이 아니라 직렬화한 출력 모델이 검증된 스냅숏과 일치하는지 확인한다.
         for name, model, expected in (
             ("diagnosis.json", Diagnosis, result.diagnosis),
             ("recommendation.json", Recommendation, result.recommendation),
@@ -274,7 +274,7 @@ def try_restore(
     result.timings_s = {"total": time.monotonic() - started}
     payloads["gate-report.json"] = result.gate_report.model_dump_json(indent=2) + "\n"
     payloads["cost.json"] = result.cost.model_dump_json(indent=2) + "\n"
-    # The mandatory seven-file contract includes this via changes.diff; cache materializes it too.
+    # 필수 7종 출력 계약은 changes.diff를 통해 이 파일을 포함하므로 캐시도 이 파일을 만든다.
     from ai.transform.dockerfile import harden_dockerignore
 
     output.mkdir(parents=True, exist_ok=True)

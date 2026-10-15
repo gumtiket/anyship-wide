@@ -42,7 +42,7 @@ class DockerInputs(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     python_version: str = Field(default="3.12", pattern=r"^3\.12$")
     system_packages: list[Literal["libpq5"]] = Field(default_factory=list, max_length=1)
-    # The detected entrypoint is authoritative; a model cannot introduce another command.
+    # 탐지한 진입점이 기준이다. 모델이 다른 명령을 끼워 넣을 수 없다.
     entrypoint: str | None = Field(
         default=None, pattern=r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*:[A-Za-z_]\w*$"
     )
@@ -131,7 +131,7 @@ def lint_dockerfile(text: str) -> list[str]:
         valid = False
     if not valid:
         errors.append("port_command")
-    # Exact template comparison also rejects extra USER/FROM/RUN/ENV instructions.
+    # 템플릿과 정확히 비교하므로 USER/FROM/RUN/ENV 명령이 추가되어도 거부된다.
     if valid:
         entrypoint = command[2].split()[2]
         options = DockerInputs(

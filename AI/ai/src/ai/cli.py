@@ -11,7 +11,7 @@ from ai.pipeline import run_analysis
 
 
 def check_llm(args: argparse.Namespace) -> int:
-    """One short request, no schema/transport retry, no source code submission."""
+    """짧은 요청 1회. 스키마·전송 재시도를 하지 않고 소스 코드도 보내지 않는다."""
     report = {"provider": args.llm, "tier": args.tier, "status": "failed"}
     llm = None
     try:
@@ -37,7 +37,7 @@ def check_llm(args: argparse.Namespace) -> int:
             request_parameters=llm.request_parameters(args.tier),
         )
     except (LLMError, ValueError) as error:
-        # Do not serialize exception messages, request bodies, SDK objects or headers.
+        # 예외 메시지, 요청 본문, SDK 객체, 헤더는 직렬화하지 않는다.
         report.update(
             error_type=type(error).__name__,
             error_code=getattr(error, "code", "InvalidConfiguration"),

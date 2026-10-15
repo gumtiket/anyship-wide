@@ -1,1 +1,1 @@
-"""TODO P3/P5: deployment specification and recommendation."""
+"""배포 명세 생성과 사전 구성 세트 추천."""

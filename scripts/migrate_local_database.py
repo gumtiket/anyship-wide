@@ -1,4 +1,4 @@
-"""Back up SQLite, verify its PostgreSQL copy, then activate the new local database."""
+"""SQLite를 백업하고 PostgreSQL 사본을 검증한 뒤 새 로컬 DB로 전환한다."""
 
 import json
 import shutil
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as error:
-        # SQL errors can contain user data or credentials. Do not echo them.
+        # SQL 오류에는 사용자 데이터나 자격 증명이 들어 있을 수 있으므로 출력하지 않는다.
         print(
             str(error)
             if isinstance(error, (ValueError, RuntimeError))

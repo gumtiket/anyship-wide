@@ -62,7 +62,7 @@ def test_scheduler_registers_one_minute_job_and_runs_in_background(tmp_path, mon
         assert len(jobs) == 1 and jobs[0].trigger.interval.total_seconds() == 60
         due = (datetime.now(UTC) - timedelta(days=1)).isoformat()
         created = client.post("/todos", json={"title": "마감 검사", "due_at": due}).json()
-        # Speed up only the temporary test copy's trigger; production default stays one minute.
+        # 임시 테스트 사본의 트리거만 빠르게 한다. 운영 기본값은 1분 그대로다.
         scheduler.reschedule_job("mark-overdue", trigger="interval", seconds=0.05)
         limit = time.monotonic() + 3
         observed = False

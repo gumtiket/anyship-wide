@@ -13,7 +13,7 @@ def test_deploy_environment_secret_boolean_is_metadata(tmp_path, flags, newline)
     diff = f"+websocket: false\n+secret: true\n+secret: {flags}\n"
     assert not masker.contains_sensitive(diff)
     assert masker.text(diff) == diff
-    # Keep the existing file-level policy; only the flag's value is exempt.
+    # 기존 파일 단위 정책은 유지하고, 플래그 값만 예외로 둔다.
     assert "deploy-spec.yaml" in masker.blocked_files
 
 

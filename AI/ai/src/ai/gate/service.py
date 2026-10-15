@@ -43,7 +43,7 @@ def run_gate(
     timeout_s: int = 40,
     sleep: Callable[[float], None] = time.sleep,
 ) -> GateReport:
-    """One sample-only run. No user data migration or runtime code-repair loop."""
+    """샘플 전용 1회 실행. 사용자 데이터 마이그레이션이나 실행 중 코드 수정 반복은 없다."""
     if not ctx.verify_sample() or original_ctx is not None and not original_ctx.verify_sample():
         return GateReport(
             status="skipped", reason="해시로 확인한 자체 샘플의 임시 트리만 실행합니다."
@@ -180,7 +180,7 @@ def run_gate(
             row.get("id") == todo_id and row.get("title") == "gate-validation" for row in rows
         ):
             raise ValueError("crud_read_invalid")
-        # Restart the app against the same temporary DB; verifies persistence outside its FS.
+        # 같은 임시 DB로 앱을 다시 시작해, 데이터가 컨테이너 파일 시스템 밖에 유지되는지 확인한다.
         runner.remove(app_name)
         containers.remove(app_name)
         start(current.image_tag, "app", app_env, [])
@@ -247,8 +247,8 @@ def run_gate(
             raise ValueError("trusted_sample_migration_required")
 
         def migrate() -> str:
-            # C uses compose run --rm web: a separate container with the same
-            # app image/environment, after app startup and before healthcheck.
+            # 배포 쪽은 compose run --rm web을 쓴다. 앱이 시작된 뒤, healthcheck 전에
+            # 같은 앱 이미지·환경으로 별도 컨테이너를 띄우는 방식이다.
             result = one_shot(
                 current.image_tag, "migrate", ["sh", "-c", "python -m app.migrate"], app_env
             )

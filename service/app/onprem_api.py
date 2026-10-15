@@ -1,4 +1,4 @@
-"""Transport-neutral registration endpoints. Callback credentials never enter URLs."""
+"""전송 방식과 무관한 온프레미스 등록 경로. 콜백 자격 증명은 URL에 넣지 않는다."""
 
 import hashlib
 import json
@@ -135,7 +135,7 @@ def router(settings, runner, db, current, mutation):
 
     def token_row(session, environment_id, token, *, lock=False):
         if lock:
-            # Use the same environment -> token lock order as reissue/removal.
+            # 재발급·삭제와 같은 순서(환경 → 토큰)로 잠근다.
             session.execute(
                 update(OnpremEnvironment)
                 .where(

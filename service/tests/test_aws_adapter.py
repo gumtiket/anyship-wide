@@ -1,4 +1,4 @@
-"""Use botocore's Stubber: no AWS credentials, metadata, or network calls."""
+"""botocore Stubber를 쓴다. AWS 자격 증명, 메타데이터, 네트워크 호출이 없다."""
 
 import uuid
 from datetime import datetime, timezone

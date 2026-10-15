@@ -1,4 +1,4 @@
-"""Persistent analysis state and reviewed multi-file publication."""
+"""분석 상태 저장과, 검토를 마친 여러 파일 변경의 게시."""
 
 import ast
 import difflib
@@ -75,8 +75,8 @@ def validated_bundle(snapshot, result):
             entry and name not in snapshot.files
         ):
             raise AnalysisError("invalid_proposal_base", "변경 파일의 원본이 기준 소스와 다릅니다.")
-        # Refuse case-only collisions and file/directory replacements, including
-        # ignored inputs. The source snapshot never follows filesystem links.
+        # 무시된 입력까지 포함해, 대소문자만 다른 경로 충돌과 파일↔디렉터리 교체를 거부한다.
+        # 소스 스냅숏은 파일 시스템 링크를 따라가지 않는다.
         for old in snapshot.entries:
             if old != name and (
                 old.casefold() == name.casefold()
@@ -158,7 +158,7 @@ def interrupt(session, runtime_id=None):
 
 
 def clear_project(session, project_id):
-    # Compete atomically with PR claims instead of deleting after a stale read.
+    # 오래된 조회 결과로 지우지 않고, PR 선점과 원자적으로 경쟁한다.
     session.execute(
         delete(AnalysisRun).where(
             AnalysisRun.project_id == project_id,

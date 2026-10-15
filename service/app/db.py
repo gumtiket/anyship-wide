@@ -257,7 +257,7 @@ class OnpremRegistrationToken(Base):
 
 
 class OnpremJob(Base):
-    """Environment operations exist before a project selects this environment."""
+    """프로젝트가 이 환경을 고르기 전부터 존재하는 환경 단위 작업."""
 
     __tablename__ = "onprem_jobs"
     __table_args__ = (

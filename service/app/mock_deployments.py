@@ -1,7 +1,7 @@
-"""Explicit development simulation using Infra's public adapter contract.
+"""인프라의 공개 어댑터 계약을 쓰는 명시적 개발용 모의 배포.
 
-No real adapter fallback, GitHub calls, AWS verification writes or secret inputs.
-The per-database process lock keeps memory-only adapter state in one worker.
+실제 어댑터로 대체 실행하지 않고, GitHub 호출·AWS 확인 결과 저장·비밀 입력도 없다.
+DB별 프로세스 잠금으로 메모리에만 있는 어댑터 상태를 한 작업자 안에 둔다.
 """
 
 import hashlib
@@ -32,7 +32,7 @@ def fail(code, message, status=409):
 
 
 def clear_targets(session, *, project_id=None, environment_id=None):
-    """Compete atomically with job claims; caller owns the deletion transaction."""
+    """작업 선점과 원자적으로 경쟁한다. 삭제 트랜잭션은 호출한 쪽이 관리한다."""
     condition = (
         MockDeployment.project_id == project_id
         if project_id is not None
@@ -187,7 +187,7 @@ class MockRunner:
             self.lock_file = None
 
     def adapter(self, target):
-        # One adapter per stable selection retains state across failure scenarios.
+        # 선택이 바뀌지 않는 동안 어댑터 하나를 유지해 실패 시나리오 사이의 상태를 이어 간다.
         if target.adapter_env_id not in self.adapters:
             self.adapters[target.adapter_env_id] = self.adapter_factory(
                 delay=self.settings.mock_step_delay
@@ -267,7 +267,7 @@ class MockRunner:
 
         def log(event):
             safe = redact_event(event).model_dump(mode="json")
-            # Do not copy arbitrary diagnostic data into the Service database.
+            # 임의의 진단 데이터를 서비스 DB에 복사하지 않는다.
             safe.pop("data", None)
             with self.sessions() as session:
                 row = session.get(MockJob, job_id)
@@ -298,7 +298,7 @@ class MockRunner:
             result_data = redact_model(result).model_dump(mode="json")
             state = "succeeded" if result.ok else "failed"
         except Exception:
-            # Exceptions may include credential-bearing diagnostics; never persist them.
+            # 예외에는 자격 증명이 담긴 진단 정보가 있을 수 있으므로 저장하지 않는다.
             result_data = {
                 "ok": False,
                 "error": {

@@ -126,8 +126,8 @@ def test_record_rejects_non_sample_and_output_inside_original(tmp_path):
 def test_recorded_golden_pipeline_and_same_input_dockerfile_bytes(tmp_path, name, expected):
     repo = ROOT / "samples" / name
     expected_core = json.loads((ROOT / "ai/tests/fixtures/golden" / f"{name}.json").read_text())
-    # C's 2026-10-10 contract retires per-app container tfvars. Keep the
-    # historical golden files unchanged and compare all other fields exactly.
+    # 배포 쪽 2026-10-10 계약에서 앱별 컨테이너 tfvars가 폐지되었다. 과거 골든 파일은
+    # 그대로 두고 나머지 필드는 모두 정확히 비교한다.
     if expected == "aws-always-on":
         expected_core["tfvars"] = {}
         expected_core["needs_confirmation"] = [
@@ -186,15 +186,15 @@ class MustNotCall:
     ),
 )
 def test_stored_demo_cache_matches_current_engine(sample):
-    # No mock: keep known stale cache visible separately from replay behavior tests.
+    # mock 없이, 알려진 오래된 캐시를 재생 동작 테스트와 따로 드러낸다.
     manifest = json.loads((DEFAULT_CACHE / sample / "manifest.json").read_text())
     assert manifest["engine_hash"] == engine_hash(), f"{sample}: cache_engine_hash_mismatch"
 
 
 def test_recorded_demo_cache_hit_with_matching_engine_is_historical(tmp_path, monkeypatch):
     manifest = json.loads((DEFAULT_CACHE / "todo/manifest.json").read_text())
-    # Exercise replay at its recorded engine version. Never rewrite a historical manifest
-    # to claim that the current engine has passed Docker; mismatch tests remain separate.
+    # 녹화된 엔진 버전으로 재생을 확인한다. 현재 엔진이 Docker를 통과했다고 주장하려고
+    # 과거 manifest를 고쳐 쓰지 않는다. 불일치 테스트는 따로 둔다.
     monkeypatch.setattr("ai.demo_cache.engine_hash", lambda: manifest["engine_hash"])
     logs = []
     result = run_analysis(

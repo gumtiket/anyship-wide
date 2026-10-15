@@ -1,4 +1,4 @@
-"""AI placeholder output plus publication of reviewed changes to real GitHub."""
+"""AI placeholder 결과와, 검토한 변경을 실제 GitHub에 게시하는 기능."""
 
 import ast
 import hashlib
@@ -26,7 +26,7 @@ def make_diff(content):
 
 
 def review_hash(row, project):
-    # Bind the review to the destination as well as to the exact pending file.
+    # 검토 결과를 대기 중인 파일뿐 아니라 게시 대상에도 묶는다.
     payload = [
         row.id,
         project.repository_id,
@@ -82,10 +82,10 @@ def validate_pr(pr, project, row):
 
 
 def publish(github, token, project, row, checkpoint):
-    """Only create a new ref, never update a user's branch or merge a PR.
+    """새 ref만 만든다. 사용자 브랜치를 갱신하거나 PR을 머지하지 않는다.
 
-    Durable commit checkpoints and branch/PR lookup make retry after an ambiguous
-    network response safe. An existing ref must point at our reviewed commit.
+    커밋 체크포인트를 저장하고 브랜치·PR을 조회하므로, 네트워크 응답이 불확실할 때
+    다시 시도해도 안전하다. 이미 있는 ref는 검토한 커밋을 가리켜야 한다.
     """
     name = project.full_name
     remote_sha = github.ref(token, name, row.branch)
@@ -120,7 +120,7 @@ def publish(github, token, project, row, checkpoint):
             f"chore: add AnyShip AI placeholder\n\nAnyShip-Change: {row.id}",
         )
         checkpoint()
-    # Recheck before exposing the commit on a remote branch.
+    # 원격 브랜치에 커밋을 노출하기 전에 다시 확인한다.
     if github.branch(token, name, project.branch)["commit"]["sha"] != row.base_sha:
         raise HTTPException(409, "기준 브랜치가 변경되었습니다. 최신 코드로 다시 요청해 주세요.")
     if not remote_sha:

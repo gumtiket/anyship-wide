@@ -1,4 +1,4 @@
-"""The only Service module that translates on-premise transport details."""
+"""온프레미스 전송 방식의 세부 사항을 다루는 유일한 서비스 모듈."""
 
 import ipaddress
 import json
@@ -50,7 +50,7 @@ def environment(row, *, require_verified=True, cleanup=False):
     if not cleanup and row.status == "ISSUED":
         raise DeployStateError("environment_not_signaled", "서버 준비 신고를 먼저 완료하세요.")
     if cleanup and row.host is None:
-        # DNS cleanup only uses env_id and never connects to this placeholder.
+        # DNS 정리는 env_id만 쓰고 이 자리표시 주소에는 접속하지 않는다.
         return AdapterEnvironment(env_id=row.env_id, host="unregistered.invalid")
     try:
         return AdapterEnvironment(
@@ -111,7 +111,7 @@ class Transport:
         key = Path(str(self.settings.deploy_ssh_key) + ".pub").read_text(encoding="utf-8").strip()
         script = render_setup_script(key, row.email)
         url = shlex.quote(self.settings.app_origin + f"/api/onprem/environments/{row.id}/ready")
-        # No token in URL/access logs; the raw token only exists in this response and on the target server.
+        # URL과 접근 로그에 토큰을 남기지 않는다. 원본 토큰은 이 응답과 대상 서버에만 있다.
         script = script.replace(
             "# 비밀이 없다: 공개 키와 이메일 주소만 들어 있다. 여러 번 실행해도 안전하다.",
             "# 일회용 등록 토큰이 포함됩니다. 파일을 공유하거나 로그에 남기지 마세요.",
@@ -132,7 +132,7 @@ class Transport:
         require_kind(row.connection_kind)
         url = shlex.quote(self.settings.app_origin + f"/api/onprem/environments/{row.id}/setup")
         payload = shlex.quote(json.dumps({"token": token}))
-        # Download completely before executing; temp file has private permissions and is always removed.
+        # 다 내려받은 뒤에 실행한다. 임시 파일은 소유자만 읽을 수 있고 항상 지운다.
         body = (
             "set -e; umask 077; f=$(mktemp); trap 'rm -f \"$f\"' EXIT; "
             f"printf %s {payload} | curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- {url} "

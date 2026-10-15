@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 
 class BuildContext(BaseModel):
-    """Owner of a private proposed sample tree. Caller must cleanup after gate use."""
+    """제안을 반영한 비공개 샘플 트리의 소유자. 게이트에서 쓴 뒤 호출한 쪽이 정리해야 한다."""
 
     model_config = ConfigDict(extra="forbid")
     root: str

@@ -1,4 +1,4 @@
-"""Versioned web boundary; worker paths and credentials never enter this payload."""
+"""버전이 있는 웹 경계 계약. 작업자 경로와 자격 증명은 이 데이터에 들어가지 않는다."""
 
 from typing import Literal
 from uuid import UUID

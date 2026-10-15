@@ -16,7 +16,7 @@ def test_old_aws_page_redirects_to_integrated_frontend(production):
         github_client_secret="test",
         github_app_slug="test",
     )
-    # The legacy address uses the same frontend and never bypasses API authentication.
+    # 예전 주소도 같은 화면을 쓰며 API 인증을 우회하지 않는다.
     with TestClient(create_app(settings), base_url=settings.app_origin) as client:
         response = client.get("/dev/aws", follow_redirects=False)
         assert response.status_code == 307

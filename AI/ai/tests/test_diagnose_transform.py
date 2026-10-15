@@ -133,7 +133,7 @@ def test_templates_produce_valid_cumulative_diff_and_preserve_models(name, monke
         ]
         assert old_classes == new_classes
         assert workspace.compile()
-        # Execute only the owned sample's temporary db module; engine creation does not connect.
+        # 소유한 샘플의 임시 db 모듈만 실행한다. 엔진 생성은 접속하지 않는다.
         monkeypatch.setenv(
             "DATABASE_URL", "postgresql://dummy:dummy-secret-do-not-use@db.invalid/sample"
         )
@@ -187,7 +187,7 @@ def test_patch_guard_rejects_driver_prefix_impersonation_and_alternative_sources
 
 
 def test_non_dummy_secret_file_is_masked_and_deferred(tmp_path):
-    # Clearly fake fixture, deliberately different from the one allowed sample sentinel.
+    # 명백한 가짜 값이며, 허용된 샘플 표식 값과 일부러 다르게 만들었다.
     fake_value = "dummy-test-token-not-real"
     repo = small_repo(
         tmp_path, 'from fastapi import FastAPI\napp=FastAPI()\nSECRET_KEY="' + fake_value + '"\n'
@@ -418,7 +418,7 @@ def test_compile_failure_returns_failed_result_and_no_accepted_changes(tmp_path)
 
 @pytest.mark.bedrock
 def test_live_bedrock_todo_diff_and_healthz():
-    """Opt-in paid Fast-tier enrichment + template diff + trusted sample runtime."""
+    """선택 실행: 유료 Fast 등급 보강 + 템플릿 diff + 신뢰된 샘플 실행."""
     from ai.llm import BedrockClient
 
     script = Path(__file__).resolve().parents[1] / "scripts/smoke_transformed.py"

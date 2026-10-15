@@ -1,4 +1,4 @@
-"""Service-facing AWS adapter contract. No AWS SDK or credentials are needed here."""
+"""서비스가 쓰는 AWS 어댑터 계약. 여기서는 AWS SDK나 자격 증명이 필요 없다."""
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -36,6 +36,6 @@ class AwsIdentity:
 
 
 class AwsAdapter(Protocol):
-    """Return a verified identity or raise AwsCheckError; never return AWS credentials."""
+    """확인된 신원을 돌려주거나 AwsCheckError를 낸다. AWS 자격 증명은 절대 돌려주지 않는다."""
 
     def check(self, *, role_arn: str, external_id: str, region: str) -> AwsIdentity: ...

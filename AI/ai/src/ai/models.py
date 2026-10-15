@@ -57,7 +57,7 @@ class EnvVar(OutputModel):
     secret: bool = False
     required: bool = False
     default: str | None = None
-    generate: bool = False  # Set only by a recognized template extraction, never by the LLM.
+    generate: bool = False  # 알려진 템플릿 추출에서만 설정하고, LLM이 설정하지 않는다.
 
 
 class TransformReport(OutputModel):
@@ -169,7 +169,7 @@ class AnalysisResult(OutputModel):
     output_files: dict[str, str]
     transformation: TransformReport = Field(default_factory=TransformReport)
     deploy_spec: DeploySpec | None = None
-    # TemporaryDirectory ownership is private; the serializable root is exposed for the gate.
+    # TemporaryDirectory 소유권은 비공개이고, 게이트에는 직렬화 가능한 루트만 노출한다.
     build_context: BuildContext | None = None
     packaging_warnings: list[WarningItem] = Field(default_factory=list)
     timings_s: dict[str, float] = Field(default_factory=dict)

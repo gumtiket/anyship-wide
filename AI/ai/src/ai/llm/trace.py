@@ -1,4 +1,4 @@
-"""Opt-in, masked model exchanges and deterministic before/after comparisons."""
+"""선택적으로 남기는 마스킹된 모델 주고받기와, 결정적인 전후 비교."""
 
 import json
 import re

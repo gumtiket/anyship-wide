@@ -1,4 +1,4 @@
-"""Reuse the adapter's fake server through the same injectable connect boundary."""
+"""어댑터의 가짜 서버를 같은 주입 가능한 접속 경계로 재사용한다."""
 
 import importlib.util
 from pathlib import Path

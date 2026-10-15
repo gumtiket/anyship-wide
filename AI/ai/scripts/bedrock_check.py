@@ -1,4 +1,4 @@
-"""Run after editable install: python ai/scripts/bedrock_check.py [--list-only]."""
+"""editable 설치 뒤 실행한다: python ai/scripts/bedrock_check.py [--list-only]"""
 
 from ai.llm.check import main
 

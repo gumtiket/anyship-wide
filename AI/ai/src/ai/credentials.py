@@ -1,4 +1,4 @@
-"""Recognized credential shapes, shared by diagnosis and masking (not a complete scanner)."""
+"""진단과 마스킹이 함께 쓰는, 알려진 자격 증명 형태(완전한 탐지기는 아니다)."""
 
 import ast
 import re
@@ -40,7 +40,7 @@ def credential_url(value: str) -> bool:
             )
         )
     except ValueError:
-        # A malformed URL with user-info is unsafe to publish as a default as well.
+        # user-info가 들어간 잘못된 형식의 URL도 기본값으로 공개하기에는 안전하지 않다.
         return "://" in value and "@" in value
 
 
@@ -79,7 +79,7 @@ def secret_literals(tree: ast.AST) -> list[ast.Constant]:
             for keyword in node.keywords:
                 if keyword.arg and credential_name(keyword.arg):
                     retain(keyword.value)
-            # getenv aliases are resolved by SourceMasker; this also detects ordinary defaults.
+            # getenv 별칭은 SourceMasker가 해석한다. 여기서는 일반 기본값도 탐지한다.
             if (
                 node.args
                 and isinstance(node.args[0], ast.Constant)

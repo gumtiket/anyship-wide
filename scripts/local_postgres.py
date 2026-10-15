@@ -1,4 +1,4 @@
-"""Manage an isolated, password-protected PostgreSQL instance for local development."""
+"""로컬 개발용으로 격리되고 비밀번호로 보호되는 PostgreSQL 인스턴스를 관리한다."""
 
 import argparse
 import json
@@ -41,15 +41,15 @@ def run(binary, *args, check=True):
     suffix = ".exe" if os.name == "nt" else ""
     result = subprocess.run(
         [str(binary_directory() / (binary + suffix)), *map(str, args)],
-        # A background postgres process can inherit pipe handles on Windows,
-        # keeping communicate() blocked after pg_ctl has already exited.
+        # Windows에서는 백그라운드 postgres 프로세스가 파이프 핸들을 물려받아,
+        # pg_ctl이 끝난 뒤에도 communicate()가 멈춰 있을 수 있다.
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
         timeout=120,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     if check and result.returncode:
-        # Never print connection strings, credentials, or server statement logs.
+        # 접속 문자열, 자격 증명, 서버 SQL 로그는 출력하지 않는다.
         raise RuntimeError(
             f"{binary} failed (exit {result.returncode}). Check .local/postgres/server.log locally."
         )
@@ -77,7 +77,7 @@ def is_running():
 
 
 def start():
-    binary_directory()  # Fail before creating configuration if binaries are missing.
+    binary_directory()  # 실행 파일이 없으면 설정을 만들기 전에 실패한다.
     DIRECTORY.mkdir(parents=True, exist_ok=True)
     if not CONFIG.exists():
         if DATA.exists():

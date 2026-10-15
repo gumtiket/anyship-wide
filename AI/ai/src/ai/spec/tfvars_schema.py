@@ -79,7 +79,7 @@ def make_tfvars(
         "image_reference": image_reference,
     }
     if selected == "aws-serverless":
-        # This branch only receives the short-request set. No guessed clamping of user values.
+        # 이 분기는 짧은 요청용 세트만 받는다. 사용자 값을 추측해서 잘라 내지 않는다.
         values[model.model_fields["request_timeout_seconds"].alias] = max(
             MVP_REQUEST_LIMIT_SECONDS, spec.workload.max_request_seconds
         )

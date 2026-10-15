@@ -1,4 +1,4 @@
-"""User-owned AWS requests, durable role inputs and verified connections."""
+"""사용자 소유 AWS 연결 요청, 영속 역할 입력, 확인된 연결."""
 
 import secrets
 import time
@@ -223,8 +223,8 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             fail(
                 410, "request_expired", "환경 등록 요청이 만료되었습니다. 새 요청을 만들어 주세요."
             )
-        # Saving an input needs no AWS configuration or credentials. An active
-        # verification must finish before another input can replace its candidate.
+        # 입력 저장에는 AWS 설정이나 자격 증명이 필요 없다. 진행 중인 확인이 끝나기 전에는
+        # 다른 입력이 그 후보를 바꿀 수 없다.
         saved = session.execute(
             update(AwsEnvironment)
             .where(
@@ -280,7 +280,7 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
                 "등록 후 AWS 연결 설정이 변경되었습니다. 새 요청을 만들어 주세요.",
             )
         if adapter is None:
-            # Preserve the input without claiming verification or marking a connection successful.
+            # 확인 완료나 연결 성공으로 표시하지 않고 입력만 보존한다.
             save_role(environment_id, body, login, session)
             status, message = ERRORS["aws_adapter_unavailable"]
             fail(status, "aws_adapter_unavailable", message, True)
@@ -312,7 +312,7 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
                 True,
             )
         external_id, region = row.external_id, row.region
-        # No database lock/transaction is held while calling AWS.
+        # AWS를 호출하는 동안에는 DB 잠금이나 트랜잭션을 잡고 있지 않는다.
         condition = (
             AwsEnvironment.id == identifier,
             AwsEnvironment.verification_token == token,
@@ -352,7 +352,7 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             if identity.account_id != role_account_id(body.role_arn):
                 raise AwsCheckError("account_mismatch")
         except Exception as error:
-            # Neither AWS error strings nor an adapter's raw exception can enter the DB/response.
+            # AWS 오류 문자열이나 어댑터의 원본 예외는 DB와 응답에 들어가지 않는다.
             code = (
                 error.code
                 if isinstance(error, AwsCheckError) and error.code in ERRORS

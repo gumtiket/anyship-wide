@@ -32,7 +32,7 @@ def validate_run_args(
     internal_networks: Collection[str],
     allowed_env: Collection[str],
 ) -> None:
-    """Strict allowlist parser. Reject duplicates and all unrecognized Docker options."""
+    """엄격한 허용 목록 파서. 중복 옵션과 알 수 없는 Docker 옵션은 모두 거부한다."""
     if not args or args[0] != "run":
         raise ValueError("gate_run_required")
     values = {}

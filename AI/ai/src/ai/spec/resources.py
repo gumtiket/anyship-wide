@@ -1,4 +1,4 @@
-"""Resolve deployment resources without importing or executing application code."""
+"""앱 코드를 import하거나 실행하지 않고 배포 자원을 해석한다."""
 
 import ast
 
@@ -48,7 +48,7 @@ def _test_only_variables(repo: RepoView | None) -> set[str]:
 
 
 class ResourceContractError(ValueError):
-    """Only fixed codes/messages, never source text or parser exceptions, leave this module."""
+    """이 모듈 밖으로는 고정된 코드·메시지만 나간다. 소스 텍스트나 파서 예외는 나가지 않는다."""
 
     def __init__(self, code: str, message: str):
         super().__init__(code)
@@ -119,7 +119,7 @@ def _postgres_evidence(repo: RepoView | None) -> bool:
     postgres = bool(drivers & POSTGRES_DRIVERS)
     other = bool(drivers & OTHER_DRIVERS)
     for path, tree in repo.modules():
-        # A test-only driver or fixture URL is not a production dependency.
+        # 테스트 전용 드라이버나 고정 데이터 URL은 운영 의존성이 아니다.
         if _test_module(path):
             continue
         imports = aliases(tree)
@@ -143,7 +143,7 @@ def _postgres_evidence(repo: RepoView | None) -> bool:
 
 
 def _migration(repo: RepoView | None) -> str | None:
-    """Recognize the existing SQLAlchemy entry point; a filename alone is insufficient."""
+    """기존 SQLAlchemy 진입점을 인식한다. 파일 이름만으로는 부족하다."""
     if repo is None:
         return None
     modules = dict(repo.modules())
@@ -215,5 +215,5 @@ def resolve_resources(
     migrate = release.migrate if release else transformation.migrate_command
     if migrate is None and postgres:
         migrate = _migration(repo)
-    # Generated commands retain generate_spec's existing length/line validation.
+    # 생성된 명령에도 generate_spec의 기존 길이·줄 검증이 그대로 적용된다.
     return postgres, migrate

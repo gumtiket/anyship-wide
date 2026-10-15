@@ -1,12 +1,12 @@
-"""Manual browser QA harness. Only fake GitHub HTTP; separate temporary DB/port.
+"""수동 브라우저 QA 하네스. GitHub HTTP만 가짜이고, 임시 DB와 포트를 따로 쓴다.
 
-Run from service: python -m tests.browser_fixture
-Open http://127.0.0.1:8001/_test_only/login. Never used by app.main or launch scripts.
---deploy: real deployment screen with a fake source/deployer (no AWS, no Docker); jobs take a few seconds.
-         /_test_only/fail-next-destroy makes the next removal fail once (to see the error screen).
---ai: real AI subprocess with a fake model and GitHub; never makes paid calls or remote writes.
---onprem: registration and deployment with a fake connect factory (no SSH, Docker or DNS calls).
-          /_test_only/onprem/ready simulates the latest registered server's readiness report.
+service에서 실행: python -m tests.browser_fixture
+http://127.0.0.1:8001/_test_only/login 을 연다. app.main이나 실행 스크립트는 이 파일을 쓰지 않는다.
+--deploy: 가짜 소스·배포자로 실제 배포 화면을 띄운다(AWS·Docker 없음). 작업은 몇 초 걸린다.
+         /_test_only/fail-next-destroy 는 다음 제거를 한 번 실패시킨다(오류 화면 확인용).
+--ai: 가짜 모델과 GitHub로 실제 AI 하위 프로세스를 실행한다. 유료 호출이나 원격 쓰기는 없다.
+--onprem: 가짜 접속 팩토리로 등록과 배포를 한다(SSH·Docker·DNS 호출 없음).
+          /_test_only/onprem/ready 는 마지막에 등록한 서버의 준비 완료 보고를 흉내 낸다.
 """
 
 import json
@@ -158,7 +158,7 @@ def main():
         deploy = "--deploy" in sys.argv or onprem
         fixture.repo_selected = not onboarding
         with httpx.Client(transport=httpx.MockTransport(fixture)) as remote:
-            # Every outgoing request is intercepted; unknown routes fail closed.
+            # 나가는 요청은 모두 가로챈다. 모르는 경로는 실패로 처리한다.
             httpx.request = remote.request
             database_url = f"sqlite:///{Path(directory) / 'test.db'}"
             runner = deploy_runner(directory, database_url) if deploy else None
@@ -247,7 +247,7 @@ def main():
                 return response
 
             if onboarding:
-                # Only this explicitly launched harness replaces the external approval page.
+                # 명시적으로 실행한 이 하네스에서만 외부 승인 페이지를 대신한다.
                 @app.middleware("http")
                 async def local_approval(request, call_next):
                     response = await call_next(request)

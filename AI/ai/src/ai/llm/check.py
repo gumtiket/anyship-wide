@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         print("필수 환경변수 누락: BEDROCK_REGION")
         return 2
     try:
-        # Validate both model IDs before any AWS action in the full check.
+        # 전체 확인에서는 AWS 동작 전에 두 모델 ID를 먼저 검증한다.
         llm = None if args.list_only else BedrockClient(max_tokens=32)
         session = boto3.Session(region_name=region)
         control = session.client(

@@ -49,7 +49,7 @@ OUTPUT_NAMES = (
 
 
 def _write_output(path: Path, text: str) -> None:
-    # Replacing the directory entry also preserves a source file hard-linked to old output.
+    # 디렉터리 항목을 바꿔치기하므로, 이전 출력에 하드 링크된 소스 파일도 보존된다.
     temporary = None
     try:
         with NamedTemporaryFile(
@@ -89,10 +89,10 @@ def run_analysis(
     use_demo_cache: bool = False,
     demo_cache_dir: str | Path | None = None,
 ) -> AnalysisResult:
-    """P5: diagnosis/proposals/packaging/recommendation and sample-only bounded repair.
+    """진단, 변경 제안, 패키징, 추천, 그리고 샘플 전용의 횟수 제한 수정.
 
-    artifact_llm is separate so existing Bedrock analysis does not add paid packaging calls.
-    Sample BuildContext contains proposed changes only; caller owns cleanup after gate use.
+    artifact_llm을 따로 두어 기존 Bedrock 분석에 유료 패키징 호출이 더해지지 않게 한다.
+    샘플 BuildContext에는 제안된 변경만 들어 있으며, 게이트에서 쓴 뒤 정리는 호출한 쪽이 맡는다.
     """
     started = time.monotonic()
     timings = {}
@@ -131,7 +131,7 @@ def run_analysis(
         re.search(r"://[^/]*@", source_repo) or credential_urls(source_repo)
     ):
         raise ValueError("source_repo에는 자격 증명을 넣을 수 없습니다.")
-    # Reject symlinked files before writing any output into a user repository.
+    # 사용자 저장소에 출력을 쓰기 전에 심볼릭 링크 파일을 거부한다.
     output_names = (*OUTPUT_NAMES, *TRACE_NAMES) if save_llm_trace else OUTPUT_NAMES
     if any((output / name).is_symlink() for name in (*output_names, ".dockerignore")):
         raise ValueError("원본 보호: 출력 파일 심볼릭 링크는 허용하지 않습니다.")
@@ -364,7 +364,7 @@ def run_analysis(
                         original = source_files(view)
                         final_sources = dict(original)
                         for name, content in candidate.items():
-                            # Retain the initial dependency edits as well as repaired Python.
+                            # 수정한 Python뿐 아니라 처음의 의존성 변경도 유지한다.
                             if name.endswith(".py") or name in transformation.changed_files:
                                 final_sources[name] = content
                         diff = make_diff(original, final_sources)

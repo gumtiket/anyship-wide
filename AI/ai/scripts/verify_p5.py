@@ -1,4 +1,4 @@
-"""Explicit, opt-in P5 measurement on the two owned samples. No deployment or Git writes."""
+"""소유한 두 샘플에 대해 명시적으로 실행하는 P5 측정. 배포나 Git 쓰기는 하지 않는다."""
 
 import argparse
 import json

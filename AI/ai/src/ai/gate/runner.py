@@ -74,8 +74,8 @@ class DockerCliRunner:
     def build(self, root: Path, tag: str) -> CommandResult:
         if os.name != "posix":
             raise RunnerError("docker_gate_requires_posix")
-        # Only the real Docker runner needs POSIX locks. Offline analysis and
-        # FakeRunner must remain importable on Windows service hosts.
+        # POSIX 잠금은 실제 Docker 실행기에만 필요하다. 오프라인 분석과 FakeRunner는
+        # Windows 서비스 호스트에서도 import할 수 있어야 한다.
         import fcntl
 
         if not re.fullmatch(r"bronze-ai-gate:gate-[a-f0-9]{24}", tag):
@@ -97,7 +97,7 @@ class DockerCliRunner:
         except BaseException:
             os.close(self.image_locks.pop(tag))
             raise
-        # Gate images are disposable. Tracking before build also cleans a timed-out build.
+        # 게이트 이미지는 일회용이다. 빌드 전에 기록해 두면 시간 초과된 빌드도 정리된다.
         self.images.add(tag)
         return self._call(
             ["build", "--label", OWNER_LABEL, "-t", tag, "-f", str(root / "Dockerfile"), str(root)],
@@ -150,7 +150,7 @@ class DockerCliRunner:
 
     def remove(self, name: str) -> None:
         if name in self.containers:
-            # -v removes only anonymous volumes attached to this disposable container.
+            # -v는 이 일회용 컨테이너에 붙은 익명 볼륨만 지운다.
             if self._call(["rm", "--force", "--volumes", name]).code:
                 raise RunnerError("gate_container_cleanup_failed")
             self.containers.remove(name)

@@ -1,4 +1,4 @@
-"""Fixed on-premise operations, using the existing worker and environment-wide leases."""
+"""고정된 온프레미스 작업. 기존 작업자와 환경 단위 선점을 그대로 쓴다."""
 
 import json
 import time
@@ -37,7 +37,7 @@ class OnpremRunner:
         try:
             acquire(session, row.id, identifier)
         except DeploymentError:
-            # A concurrent identical request may have committed while acquire waited.
+            # 잠금을 기다리는 동안 같은 요청이 먼저 커밋했을 수 있다.
             if session.scalar(
                 select(OnpremJob.id).where(
                     OnpremJob.environment_id == row.id, OnpremJob.request_id == str(request_id)
@@ -138,7 +138,7 @@ class OnpremRunner:
             if job is None or job.status not in ACTIVE:
                 return
             row = session.get(OnpremEnvironment, job.environment_id)
-            # Lock and verify ownership before any state transition or selection cleanup.
+            # 상태를 바꾸거나 선택을 정리하기 전에 잠그고 소유권을 확인한다.
             held = session.execute(
                 update(OnpremEnvironment)
                 .where(OnpremEnvironment.id == row.id, OnpremEnvironment.active_job_id == job_id)
@@ -151,7 +151,7 @@ class OnpremRunner:
                 try:
                     ip = verified_address(row, data)
                 except (ValueError, DeployStateError):
-                    # Never mark a callback address verified without a matching adapter observation.
+                    # 어댑터가 실제로 확인하지 않은 콜백 주소는 확인됨으로 표시하지 않는다.
                     data = {
                         "ok": False,
                         "error": {
@@ -232,7 +232,7 @@ class OnpremRunner:
                         }
                         finish(session, job.id, ok=False, result={"ok": False, "error": error})
                         raise DeploymentError(409, error["code"], error["message"])
-                    # A failed or interrupted deploy may leave remote resources; keep its app name for cleanup.
+                    # 실패하거나 중단된 배포는 원격 자원을 남길 수 있으므로 정리용으로 앱 이름을 남긴다.
                     target.app_name = str(fetched.spec.get("app", ""))
                     session.commit()
                 self.parent._start(

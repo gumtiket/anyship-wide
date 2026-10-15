@@ -1,4 +1,4 @@
-"""P2 health check in trusted sample copies with an unavailable Postgres endpoint."""
+"""신뢰된 샘플 사본에서, 접속할 수 없는 Postgres 주소로 health 확인을 한다."""
 
 import argparse
 import json

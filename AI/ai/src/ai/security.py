@@ -1,4 +1,4 @@
-"""Recognized-secret masking for P2. This is not a general secret scanner."""
+"""알려진 형태의 비밀만 마스킹한다. 일반 비밀 탐지기가 아니다."""
 
 import ast
 import json
@@ -20,10 +20,10 @@ from ai.detectors.repo import RepoView, aliases, qualified
 
 
 def deployment_secret_flags(text: str) -> set[int]:
-    """Locate boolean env[].secret metadata, preserving quoted strings and credentials.
+    """env[].secret의 불리언 메타데이터 위치를 찾되, 따옴표 문자열과 자격 증명은 보존한다.
 
-    YAML nodes retain types and source positions without constructing custom objects.
-    Aliases must not exempt credential-looking lines elsewhere in the document.
+    YAML 노드는 사용자 정의 객체를 만들지 않고도 타입과 소스 위치를 유지한다.
+    별칭(alias) 때문에 문서의 다른 곳에 있는 자격 증명 같은 줄이 예외가 되면 안 된다.
     """
     try:
         root = yaml.compose(text, Loader=yaml.SafeLoader)
@@ -65,7 +65,7 @@ def deployment_secret_flags(text: str) -> set[int]:
 
 
 def node_span(source: str, node: ast.AST) -> tuple[int, int]:
-    """AST columns count UTF-8 bytes, including for Korean source literals."""
+    """AST 열 번호는 한국어 리터럴을 포함해 UTF-8 바이트 단위로 센다."""
     lines = source.splitlines(keepends=True)
     start = sum(len(line.encode("utf-8")) for line in lines[: node.lineno - 1]) + node.col_offset
     end = (
@@ -155,7 +155,7 @@ class SourceMasker:
                 self._values.add(node.value)
                 if node.value != DUMMY_SECRET:
                     self.blocked_files.add(file)
-        # Config values are not sent to the LLM in P2, but avoid diffing credential-like configs.
+        # 설정 값은 LLM에 보내지 않지만, 자격 증명처럼 보이는 설정은 diff에도 넣지 않는다.
         for file in repo.files():
             text = repo.read(file)
             urls = credential_urls(text)
@@ -228,7 +228,7 @@ class SourceMasker:
     def summaries(self, repo: RepoView, *, budget: int = 20000) -> dict[str, str]:
         result = {}
         for file, _ in repo.modules():
-            source = self.source(repo, file)  # Mask full file before selecting/truncating it.
+            source = self.source(repo, file)  # 파일을 고르거나 자르기 전에 파일 전체를 마스킹한다.
             if budget <= 0:
                 break
             result[file] = source[:budget]

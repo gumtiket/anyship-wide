@@ -1,4 +1,4 @@
-"""Real AI subprocess and GitHub HTTP boundary, without paid calls or remote writes."""
+"""실제 AI 하위 프로세스와 GitHub HTTP 경계를 확인한다. 유료 호출이나 원격 쓰기는 없다."""
 
 import base64
 import hashlib
@@ -448,7 +448,7 @@ def test_process_cancellation_terminates_child(tmp_path):
         ProcessAIProvider(SimpleNamespace(ai_timeout=60)).run(
             tmp_path, {}, lambda _: None, lambda: True
         )
-    # On Windows this deletion would fail while the output stream was still open.
+    # Windows에서는 출력 스트림이 열려 있는 동안 이 삭제가 실패한다.
     (tmp_path / "events.jsonl").unlink()
 
 

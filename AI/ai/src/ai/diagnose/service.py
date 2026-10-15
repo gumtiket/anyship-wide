@@ -78,7 +78,7 @@ class Enrichment(OutputModel):
 def review_factors(diagnosis: Diagnosis) -> list[FactorReview]:
     hits = {v.factor for v in diagnosis.violations if v.source == "rule"}
     if any(v.rule == "sqlite_usage" for v in diagnosis.violations if v.source == "rule"):
-        hits.add(4)  # A local SQLite URL also lacks an externally attached DB address.
+        hits.add(4)  # 로컬 SQLite URL도 외부에서 붙인 DB 주소가 없는 경우에 해당한다.
     incomplete = any(w.code in {"scan_limit", "python_syntax_error"} for w in diagnosis.warnings)
     result = []
     for number, (principle, owner) in enumerate(FACTOR_OWNERS, 1):

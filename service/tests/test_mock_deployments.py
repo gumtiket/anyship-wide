@@ -1,4 +1,4 @@
-"""Service -> Infra MockAdapter integration; no external cloud or repository writes."""
+"""서비스 → 인프라 MockAdapter 통합 테스트. 외부 클라우드나 저장소에 쓰지 않는다."""
 
 import json
 import threading
@@ -134,7 +134,7 @@ def test_full_lifecycle_and_version_history(mock_web, source, set_name):
     assert web.client.get(web.endpoint + "/jobs").json()[0]["id"] == removed["id"]
     assert len(web.client.get(web.endpoint + "/jobs?limit=2&offset=2").json()) == 2
     assert web.client.get(web.endpoint + "/jobs?limit=0").status_code == 422
-    # Registration deletion removes only mock history and selection in the local DB.
+    # 등록 삭제는 로컬 DB의 모의 배포 기록과 선택만 지운다.
     assert (
         web.client.delete(f"/api/projects/{web.project['id']}", headers=web.headers).status_code
         == 204
@@ -286,7 +286,7 @@ def test_owner_csrf_and_input_validation(mock_web):
         base_url=ORIGIN,
     ) as outsider:
         assert outsider.get(web.endpoint).status_code == 401
-        # A separate identity, including membership in the same workspace, cannot view the owner's mock jobs.
+        # 같은 워크스페이스 구성원이라도 다른 사용자는 소유자의 모의 작업을 볼 수 없다.
         from app.db import LoginSession, Membership
 
         gateway = FakeGitHub()
@@ -306,7 +306,7 @@ def test_owner_csrf_and_input_validation(mock_web):
                 )
                 row.workspace_id = me["workspace"]["id"]
                 session.commit()
-            # Reuse those cookies against the running mock application without starting another worker.
+            # 작업자를 새로 띄우지 않고, 실행 중인 모의 앱에 그 쿠키를 다시 쓴다.
             visitor = TestClient(web.app, base_url=ORIGIN)
             visitor.cookies.update(other.cookies)
             assert visitor.get(web.endpoint).status_code == 404

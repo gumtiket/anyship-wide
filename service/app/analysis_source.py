@@ -1,4 +1,4 @@
-"""Bounded Git tree/blob snapshots. Never execute repository configuration or code."""
+"""크기를 제한한 Git tree/blob 스냅숏. 저장소의 설정이나 코드는 절대 실행하지 않는다."""
 
 import base64
 import hashlib

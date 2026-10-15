@@ -1,4 +1,4 @@
-"""Environment-wide leases shared by registration and project deployment jobs."""
+"""등록 작업과 프로젝트 배포 작업이 함께 쓰는 환경 단위 선점."""
 
 import json
 import time
@@ -23,7 +23,7 @@ def acquire(session, environment_id, job_id, now=None):
     if changed.rowcount != 1:
         session.rollback()
         raise DeploymentError(409, "environment_busy", "환경의 다른 작업이 진행 중입니다.")
-    # A dead job must not appear active forever, or overwrite the new owner later.
+    # 죽은 작업이 영원히 진행 중으로 보이거나, 나중에 새 소유자의 상태를 덮어쓰면 안 된다.
     expired = (
         select(DeployJob.id)
         .join(Deployment, Deployment.project_id == DeployJob.project_id)

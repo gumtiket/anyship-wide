@@ -6,7 +6,7 @@ import httpx
 class GitHubFailure(Exception):
     def __init__(self, status=502, code="github_error"):
         self.status = status
-        # Never retain GitHub error descriptions, URLs, tokens or arbitrary payloads.
+        # GitHub 오류 설명, URL, 토큰, 임의의 응답 본문은 보관하지 않는다.
         allowed = {
             "github_error",
             "network_error",
@@ -22,7 +22,7 @@ class GitHubFailure(Exception):
 
 
 class GitHubAPI:
-    """Uses a user token: access is the intersection of App and user permissions."""
+    """사용자 토큰을 쓴다. 접근 범위는 App 권한과 사용자 권한의 교집합이다."""
 
     def _request(self, method, url, **kwargs):
         try:
@@ -88,7 +88,7 @@ class GitHubAPI:
             result.extend(items)
             if len(items) < 100:
                 return result
-        raise GitHubFailure()  # Never silently return a truncated authorization list.
+        raise GitHubFailure()  # 잘린 설치 목록을 조용히 돌려주지 않는다.
 
     def profile(self, token):
         return self.get(token, "/user")
@@ -199,7 +199,7 @@ class GitHubAPI:
 
 
 class DemoGitHub:
-    """Explicit offline fixture; never accesses GitHub or writes remote resources."""
+    """명시적인 오프라인 고정 데이터. GitHub에 접속하거나 원격 자원을 만들지 않는다."""
 
     def installations(self, token):
         return [{"id": 101, "account": {"login": "demo-workspace"}, "app_slug": "demo-workspace"}]

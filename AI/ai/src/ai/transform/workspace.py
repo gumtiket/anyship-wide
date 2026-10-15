@@ -129,7 +129,7 @@ class Workspace:
             raise ValueError("git_apply_failed")
 
     def compile(self) -> bool:
-        # compileall parses source; it does not import/execute the app. Output stays private.
+        # compileall은 소스를 파싱만 하고 앱을 import·실행하지 않는다. 출력은 비공개로 둔다.
         try:
             return (
                 subprocess.run(

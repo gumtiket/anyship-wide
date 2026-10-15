@@ -79,7 +79,7 @@ def detect_sqlite(repo: RepoView) -> list[Violation]:
 
 
 def detect_db_url(repo: RepoView) -> list[Violation]:
-    # SQLite is represented by sqlite_usage, preventing a duplicate sample finding.
+    # SQLite는 sqlite_usage로 표현해 샘플에서 같은 위반이 두 번 나오지 않게 한다.
     return _url_rule(
         repo,
         "hardcoded_db_url",

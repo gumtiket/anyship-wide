@@ -1,4 +1,4 @@
-"""Opt-in transport recording and strict offline replay for owned samples only."""
+"""소유한 샘플에만 쓰는 선택적 전송 녹화와 엄격한 오프라인 재생."""
 
 import hashlib
 import json
@@ -29,7 +29,7 @@ LEGACY_PARAMETERS = {"fast": {"inferenceConfig": {"maxTokens": 4096, "temperatur
 
 
 class PlaybackError(Exception):
-    """Fatal replay error; cannot be swallowed by normal LLM fallback handlers."""
+    """치명적인 재생 오류. 일반 LLM 대체 처리에서 삼킬 수 없다."""
 
 
 def digest(value) -> str:
@@ -53,7 +53,7 @@ def assert_public(text: str) -> None:
         r"(?i)(?:password|secret[_-]?key|api[_-]?key|access[_-]?token)[\"']?\s*[:=]\s*"
         r"[\"'](?!dummy-secret-do-not-use|\[REDACTED\])[^\"']+",
     )
-    # Image/tree SHA strings can contain twelve adjacent digits. They are not account IDs.
+    # 이미지·tree SHA 문자열에는 숫자 12개가 연속으로 나올 수 있다. 계정 ID가 아니다.
     without_hashes = re.sub(r"\b[a-f0-9]{24,64}\b", "[HASH]", text)
     if re.search(patterns[0], without_hashes) or any(
         re.search(pattern, text) for pattern in patterns[1:]
@@ -175,7 +175,7 @@ def _validate_response(provider: Provider, model: str, parameters: dict, result:
         if provider == "anthropic" and result.usage.get("requested_model", model) != model:
             raise PlaybackError("fixture_model_mismatch")
         return
-    # A recorded server-side fallback is a different served model, not a new request.
+    # 녹화된 서버 측 대체 응답은 다른 모델이 응답한 것일 뿐 새 요청이 아니다.
     if (
         provider == "anthropic"
         and parameters.get("fallbacks") == "default"
@@ -251,7 +251,7 @@ class RecordingClient(ValidatingClient):
         result = self.backend._invoke(system, user, tier=tier, stage=stage)
         _validate_response(self.provider, self.models[tier], self.parameters[tier], result)
         response = result.model_dump(mode="json", exclude={"parsed"})
-        # Preserve complete response bytes except recognized secret/credential substitutions.
+        # 알려진 비밀·자격 증명 치환을 빼고는 응답 바이트를 그대로 보존한다.
         safe_text = self.masker.text(result.text, allow_dummy=True)
         safe_text = re.sub(
             r"([a-z][a-z0-9+.-]*://)[^\s/@]+:[^\s/@]+@",
@@ -308,7 +308,7 @@ class ReplayClient(ValidatingClient):
         self.provider = provider
         directory = root / provider / self.sample
         if not directory.exists() and provider == "bedrock":
-            directory = root / self.sample  # Existing immutable v1 Bedrock recordings.
+            directory = root / self.sample  # 기존의 변경 불가 v1 Bedrock 녹화본.
         try:
             if not directory.exists():
                 raise PlaybackError(f"fixture_missing: {self.sample}")

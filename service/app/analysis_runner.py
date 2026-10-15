@@ -1,4 +1,4 @@
-"""Service-side orchestration; only credential-free snapshots enter the AI child."""
+"""서비스 쪽 분석 실행 조율. AI 자식 프로세스에는 자격 증명 없는 스냅숏만 들어간다."""
 
 import json
 import tempfile
@@ -42,7 +42,7 @@ class AnalysisRunner:
     def close(self):
         self.stopping.set()
         if self.executor:
-            # Children observe the event and terminate, then release their temporary dirs.
+            # 자식 프로세스는 이 이벤트를 보고 종료한 뒤 임시 디렉터리를 정리한다.
             self.executor.shutdown(wait=True, cancel_futures=False)
             self.executor = None
             with self.sessions() as session:
@@ -73,7 +73,7 @@ class AnalysisRunner:
                 "analysis_busy", "분석 작업이 많습니다. 잠시 후 다시 요청해 주세요."
             )
         try:
-            # Serialize submission with project deletion on PostgreSQL.
+            # PostgreSQL에서 분석 제출과 프로젝트 삭제가 순서대로 처리되게 한다.
             if (
                 session.scalar(select(Project).where(Project.id == project.id).with_for_update())
                 is None
@@ -244,7 +244,7 @@ class AnalysisRunner:
                     Path(temporary) / "repo",
                     cancelled=self.stopping.is_set,
                 )
-                token = None  # The child receives only a snapshot and non-secret request metadata.
+                token = None  # 자식 프로세스에는 스냅숏과 비밀이 아닌 요청 정보만 넘긴다.
                 result = self.provider.run(
                     Path(temporary),
                     request,

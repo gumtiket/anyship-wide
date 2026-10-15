@@ -27,7 +27,7 @@ class Rate:
     label: str = "단가 미확인"
 
 
-# Each number is a deliberately unconfirmed planning assumption. Not an AWS quotation.
+# 모든 숫자는 일부러 확정하지 않은 계획용 가정값이다. AWS 견적이 아니다.
 RATES = {
     "aws-serverless": {
         "requests": Rate(0.20, "USD / 백만 요청"),

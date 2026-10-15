@@ -1,4 +1,4 @@
-"""Explicit opt-in STS reference adapter; the Service entrypoint never selects it."""
+"""명시적으로 켤 때만 쓰는 STS 참조 어댑터. 서비스 진입점은 이를 자동으로 고르지 않는다."""
 
 import uuid
 from contextlib import ExitStack
@@ -27,7 +27,7 @@ class STSAdapter:
             ignore_configured_endpoint_urls=True,
         )
         try:
-            # A fresh session avoids sharing boto3 Sessions between request threads.
+            # 요청 스레드끼리 boto3 Session을 공유하지 않도록 매번 새 세션을 만든다.
             session = boto3.Session()
             with ExitStack() as cleanup:
                 sts = session.client("sts", region_name=region, config=config)
@@ -38,7 +38,7 @@ class STSAdapter:
                     "DurationSeconds": 900,
                 }
                 credentials = sts.assume_role(**parameters, ExternalId=external_id)["Credentials"]
-                # Only an explicit AccessDenied proves these negative probes failed as required.
+                # 명시적인 AccessDenied만이 이 거부 확인 호출이 의도대로 실패했다는 증거다.
                 for extra in ({}, {"ExternalId": "invalid-" + uuid.uuid4().hex}):
                     try:
                         sts.assume_role(**parameters, **extra)

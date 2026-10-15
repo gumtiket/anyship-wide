@@ -4,7 +4,7 @@ from ai.models import CallCost, CostReport
 
 
 class TrackedLLM:
-    """Expose only this analysis's usage; include shared-client schema retries when available."""
+    """이 분석의 사용량만 보여 준다. 공유 클라이언트의 스키마 재시도도 알 수 있으면 포함한다."""
 
     def __init__(self, client: LLMClient) -> None:
         self.client = client

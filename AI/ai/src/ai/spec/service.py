@@ -23,9 +23,7 @@ from ai.spec.resources import resolve_resources
 
 
 def validate_spec(spec: DeploySpec) -> None:
-    DeploySpec.model_validate(
-        spec.model_dump(mode="json")
-    )  # Includes byte totals and semantic checks.
+    DeploySpec.model_validate(spec.model_dump(mode="json"))  # 바이트 합계와 의미 검사를 포함한다.
     schema = json.loads(files("ai").joinpath("spec/schema.json").read_text())
     Draft202012Validator(schema).validate(spec.model_dump(mode="json", exclude_none=True))
 
@@ -79,7 +77,7 @@ def generate_spec(
         if variable.name == "PORT":
             continue
         if postgres and variable.name == "DATABASE_URL":
-            continue  # Adapter injects backing service URLs; it must not generate random DB URLs.
+            continue  # 백엔드 서비스 URL은 어댑터가 주입한다. 임의의 DB URL을 생성하면 안 된다.
         if not allowed_name(variable.name):
             transformation.warnings.append(
                 WarningItem(

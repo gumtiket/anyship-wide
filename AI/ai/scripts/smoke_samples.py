@@ -1,4 +1,4 @@
-"""Start real uvicorn processes against temporary sample copies; no AWS/Docker."""
+"""임시 샘플 사본에 실제 uvicorn 프로세스를 띄워 확인한다. AWS·Docker는 쓰지 않는다."""
 
 import json
 import shutil

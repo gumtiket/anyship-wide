@@ -1,4 +1,4 @@
-"""Use SQLite by default, or isolated schemas in an explicitly named PostgreSQL test DB."""
+"""기본은 SQLite를 쓰고, 이름을 명시한 PostgreSQL 테스트 DB가 있으면 격리된 스키마를 쓴다."""
 
 import os
 import uuid

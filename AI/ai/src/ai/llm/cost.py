@@ -26,7 +26,7 @@ class CostTracker:
         self.unobserved_stages: list[str] = []
 
     def record_unobserved(self, stage: str) -> None:
-        """An attempted request failed before validated usage was available."""
+        """검증된 사용량을 받기 전에 요청 시도가 실패했다."""
         self.unobserved_stages.append(stage)
 
     @classmethod
@@ -60,7 +60,7 @@ class CostTracker:
                 usage=usage,
                 stop_reason=stop_reason,
             )
-        # Validate token counts before computing a price.
+        # 가격을 계산하기 전에 토큰 수를 검증한다.
         call = CallCost(
             stage=stage,
             model_id=model_id,
@@ -106,8 +106,8 @@ class CostTracker:
             )
             call.cost_usd = self._anthropic_price(call, entry)
             if not last and call.output_tokens == 0:
-                # Earlier refusal categories aren't reported per iteration. Their
-                # billing status cannot be inferred from a zero output count.
+                # 이전 거부 분류는 반복별로 보고되지 않는다. 출력 수가 0이라는 것만으로
+                # 과금 여부를 추정할 수 없다.
                 call.cost_usd = None
             if last and stop_reason == "refusal" and call.output_tokens == 0:
                 category = usage.get("refusal_category")
@@ -144,7 +144,7 @@ class CostTracker:
         long = price.long_prompt_threshold is not None and (
             call.input_tokens + read + created > price.long_prompt_threshold
         )
-        # Long-context cache rates are not registered in this first integration.
+        # 긴 문맥(long-context) 캐시 단가는 아직 등록하지 않았다.
         if long and (read or created):
             return None
         terms = (
@@ -162,7 +162,7 @@ class CostTracker:
         )
         if any(count and rate is None for count, rate in terms):
             return None
-        # Missing base pricing remains unknown even on a zero-token result.
+        # 기본 단가가 없으면 토큰이 0이어도 비용은 알 수 없음으로 둔다.
         if terms[0][1] is None or terms[1][1] is None:
             return None
         return sum(count * rate for count, rate in terms if rate is not None) / 1_000_000

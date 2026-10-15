@@ -1,4 +1,4 @@
-"""Exercise Service APIs with real auth/session handling and a fake AWS adapter."""
+"""실제 인증·세션 처리와 가짜 AWS 어댑터로 서비스 API를 확인한다."""
 
 import threading
 import time
@@ -120,7 +120,7 @@ def test_url_creation_retries_and_configuration_snapshot(aws_web):
     assert len(client.get(ENDPOINT).json()) == 2
     assert len(client.get(ENDPOINT + "?limit=1&offset=1").json()) == 1
     assert client.get("/api/config").json()["aws_regions"] == list(settings.aws_regions)
-    # A restart/settings update must not rotate an already-issued trust contract.
+    # 재시작이나 설정 변경이 이미 발급한 신뢰 계약을 바꾸면 안 된다.
     restarted = create_app(
         replace(settings, aws_template_url=TEMPLATE + "2"), FakeGitHub(), aws_adapter=adapter
     )
@@ -194,7 +194,7 @@ def test_without_adapter_saves_waits_and_resumes_same_registration(
             assert pending["cloudformation_url"] == row["cloudformation_url"]
         assert not adapter.calls
 
-    # Wiring in the finished adapter uses the same stored trust contract.
+    # 완성된 어댑터를 연결해도 저장된 같은 신뢰 계약을 쓴다.
     assert client.get("/api/config").json()["aws_verification_available"]
     verified = verify(client, headers, row["id"]).json()
     assert verified["status"] == "CONNECTED" and verified["role_arn"] == ROLE
@@ -267,7 +267,7 @@ def test_access_control_and_client_cannot_override_server_values(aws_web):
         assert other.get(ENDPOINT + "/" + row["id"]).status_code == 404
         assert verify(other, other_headers, row["id"]).status_code == 404
         assert save_role(other, other_headers, row["id"]).status_code == 404
-        # Membership in the same workspace still does not grant access to another user's request.
+        # 같은 워크스페이스 구성원이어도 다른 사용자의 요청에는 접근할 수 없다.
         with app.state.sessions() as session:
             original = session.get(AwsEnvironment, row["id"])
             other_login = session.scalar(
@@ -461,7 +461,7 @@ def test_same_verified_role_cannot_be_registered_twice(aws_web):
     app, client, _, headers, _ = aws_web
     first = create(client, headers).json()
     second = create(client, headers).json()
-    # Unverified inputs must not reserve a role or prevent another connection.
+    # 확인되지 않은 입력이 역할을 선점하거나 다른 연결을 막으면 안 된다.
     assert save_role(client, headers, first["id"]).status_code == 200
     assert save_role(client, headers, second["id"]).status_code == 200
     assert verify(client, headers, first["id"]).status_code == 200

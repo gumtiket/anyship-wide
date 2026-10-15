@@ -1,4 +1,4 @@
-"""Safe edits may resolve the requested rule, but may not alter adjacent business behavior."""
+"""안전 수정은 요청한 규칙을 해결할 수 있지만, 인접한 업무 동작을 바꾸면 안 된다."""
 
 import hashlib
 import json
@@ -170,8 +170,8 @@ def test_requested_safe_edits_preserve_scope_and_follow_c_env_policy(tmp_path, b
     (result, ids, attempts, warnings), fake, targets = patch(tmp_path, before, after, rule)
     check_patch_scope({"main.py": before}, {"main.py": after}, {"main.py"}, targets)
     if rule == "hardcoded_db_url":
-        # Structurally valid extraction is still deferred: C owns DATABASE_URL
-        # binding, so the LLM may not introduce it as an ordinary app setting.
+        # 구조적으로 올바른 추출이어도 보류한다. DATABASE_URL 연결은 배포 쪽이 맡으므로
+        # LLM이 이를 일반 앱 설정으로 끼워 넣으면 안 된다.
         assert result["main.py"] == before and not ids
         assert "environment_name_forbidden" in {warning.code for warning in warnings}
         assert "environment_name_forbidden" in fake.calls[1].user

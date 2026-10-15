@@ -11,7 +11,7 @@ from ai.transform.dockerfile import harden_dockerignore
 
 
 def has_psycopg2(requirements: str) -> bool:
-    """Only an unconditional psycopg2 distribution supplies the selected driver."""
+    """조건 없는 psycopg2 배포판만 선택된 드라이버를 제공한 것으로 본다."""
     for line in requirements.splitlines():
         try:
             dependency = Requirement(line.split(" #", 1)[0].strip())
@@ -62,7 +62,7 @@ def template_changes(
     after = dict(before)
     if ".dockerignore" not in masker.blocked_files:
         existing = before.get(".dockerignore", "")
-        # Preserve existing ignore patterns but append mandatory exclusions last (after any !).
+        # 기존 무시 패턴은 유지하되, 필수 제외 항목을 맨 뒤(모든 ! 뒤)에 덧붙인다.
         after[".dockerignore"] = harden_dockerignore(existing)
     environment = {}
     report = TransformReport(sample_name=sample_name)

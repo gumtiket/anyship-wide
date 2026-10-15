@@ -23,7 +23,7 @@ from ai.transform.dockerfile import lint_dockerfile
 from ai.transform.service import _patch_candidate, env_vars
 from ai.transform.workspace import source_files
 
-MAX_GATE_ATTEMPTS = 3  # Initial execution plus at most two repaired executions.
+MAX_GATE_ATTEMPTS = 3  # 첫 실행과, 수정한 뒤의 재실행 최대 2회.
 REPAIRABLE = {"build", "migrate", "app_start", "healthcheck", "postgres_crud"}
 
 

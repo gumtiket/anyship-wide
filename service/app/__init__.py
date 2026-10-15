@@ -1,1 +1,1 @@
-"""Web service. The standalone github package remains reusable."""
+"""웹 서비스. 독립된 github 패키지는 따로 재사용할 수 있다."""

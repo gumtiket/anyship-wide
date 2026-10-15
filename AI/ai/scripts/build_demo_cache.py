@@ -1,4 +1,4 @@
-"""Opt-in provider recording/replay + real Docker capture on owned samples only."""
+"""소유한 샘플에만 쓰는 선택적 제공자 녹화·재생과 실제 Docker 결과 수집."""
 
 import argparse
 from pathlib import Path

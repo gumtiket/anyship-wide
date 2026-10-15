@@ -1,4 +1,4 @@
-"""LLM diff transport must not weaken original-source approval or expose secrets."""
+"""LLM diff 전송이 원본 소스 승인을 약하게 하거나 비밀을 노출하면 안 된다."""
 
 import json
 import re
@@ -45,7 +45,7 @@ def attempt(view, masker, targets, diff):
 
 
 def transport_error(diff):
-    # Reproduce wrong model header counts/coordinates and missing path prefixes.
+    # 모델이 틀리게 낸 헤더 수·좌표와 빠진 경로 접두사를 재현한다.
     diff = re.sub(r"@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", "@@ -999,1 +888,1 @@", diff)
     return diff.replace("--- a/main.py", "--- main.py").replace("+++ b/main.py", "+++ main.py")
 
@@ -166,7 +166,7 @@ def test_line_endings_and_source_eof_marker(ending):
     patch = canonical_patch({"main.py": before}, diff, {"main.py"}, {})
     with Workspace({"main.py": before}) as workspace:
         workspace.apply(patch)
-        # Check transport bytes, independently of Workspace.read's newline policy.
+        # Workspace.read의 줄바꿈 정책과 무관하게 전송 바이트를 확인한다.
         assert (workspace.root / "main.py").read_bytes().decode("utf-8") == after
 
 

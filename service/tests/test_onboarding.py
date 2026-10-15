@@ -1,4 +1,4 @@
-"""Onboarding authorization, state lifecycle, account isolation and recovery."""
+"""온보딩 권한 확인, 상태 수명 주기, 계정 격리와 복구."""
 
 import time
 from urllib.parse import parse_qs, urlsplit

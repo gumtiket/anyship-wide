@@ -1,4 +1,4 @@
-"""Exercise the real GitHub adapter against HTTP fixtures, never real remote writes."""
+"""HTTP 고정 응답으로 실제 GitHub 어댑터를 확인한다. 실제 원격 쓰기는 하지 않는다."""
 
 import hashlib
 import json
@@ -119,7 +119,7 @@ class GitHubHTTP:
                     data = {"sha": sha}
                 elif route == "/git/commits":
                     assert body["parents"] == [BASE]
-                    assert len(self.trees[body["tree"]]) == 2  # Existing README is preserved.
+                    assert len(self.trees[body["tree"]]) == 2  # 기존 README는 보존된다.
                     sha = hashlib.sha1(request.content).hexdigest()
                     self.commits[sha] = {
                         "sha": sha,
@@ -397,7 +397,7 @@ def test_refresh_recovers_pr_after_server_checkpoint_was_lost(real):
     app, client, remote, headers, endpoint = real
     change = prepare(real)
     assert publish(real, change).status_code == 200
-    # Simulate process death after GitHub success and before saving its response.
+    # GitHub 요청은 성공했지만 응답을 저장하기 전에 프로세스가 죽은 상황을 흉내 낸다.
     with app.state.sessions() as session:
         row = session.scalar(select(CodeChange))
         row.status, row.pr_url, row.pr_number = "applied", "", 0

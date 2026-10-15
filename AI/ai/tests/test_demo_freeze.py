@@ -1,4 +1,4 @@
-"""Demo contract: model review cannot change rules; replay cannot cross providers."""
+"""데모 계약: 모델 검토가 규칙을 바꿀 수 없고, 재생은 제공자를 넘나들 수 없다."""
 
 import importlib.util
 import json
@@ -351,7 +351,7 @@ def test_fake_replay_cannot_be_saved_as_real_provider_cache(tmp_path):
         SAMPLE, out_dir=tmp_path / "out", llm=fake, decision_llm=fake, log=lambda *_: None
     )
     try:
-        # Synthetic in-memory fields exercise the guard; no fake result is written as proof.
+        # 메모리 안의 합성 필드로 보호 장치를 확인한다. 가짜 결과를 증거로 쓰지 않는다.
         result.execution_source = "llm_replay"
         result.gate_report.status = "passed"
         result.gate_report.runner = "docker"

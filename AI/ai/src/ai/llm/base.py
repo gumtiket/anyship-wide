@@ -58,7 +58,7 @@ class LLMExchange(OutputModel):
 
 
 class LLMError(RuntimeError):
-    """Safe public error without source code, response text or AWS credentials."""
+    """소스 코드, 응답 본문, AWS 자격 증명이 없는 공개용 오류."""
 
     def __init__(self, message: str, *, transport_attempts: int | None = None) -> None:
         self.transport_attempts = transport_attempts
@@ -84,7 +84,7 @@ class LLMClient(Protocol):
 
 
 class ValidatingClient:
-    """Schema retry loop shared by the real and fake transports."""
+    """실제 전송과 가짜 전송이 함께 쓰는 스키마 재시도 반복."""
 
     def __init__(self, *, tracker: CostTracker | None = None, schema_retries: int = 2) -> None:
         if not 0 <= schema_retries <= 2:
@@ -202,7 +202,7 @@ class ValidatingClient:
                 self._observe(exchange)
                 return result
             except ValidationError as error:
-                # Include error locations/types, never rejected input or response text.
+                # 오류 위치와 유형만 넣고, 거부된 입력이나 응답 본문은 넣지 않는다.
                 feedback = [
                     {"loc": list(item["loc"]), "type": item["type"]}
                     for item in error.errors(include_input=False, include_url=False)
