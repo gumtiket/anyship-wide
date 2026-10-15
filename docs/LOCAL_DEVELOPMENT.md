@@ -140,6 +140,19 @@ cd service
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
+## 코드 스타일
+
+- 주석과 docstring은 한국어로 씁니다. 사용자에게 보이는 문구도 한국어이고, 코드 식별자와 로그 키는 영어를 유지합니다.
+- Python은 [ruff](https://docs.astral.sh/ruff/)로 린트·포맷합니다. 공통 설정은 저장소 루트의 `ruff.toml`이고 `service`, `infra/adapters`가 이를 확장합니다. `AI/ai`는 자체 `pyproject.toml` 설정(Python 3.12, 줄 길이 검사 포함)을 씁니다.
+- 프론트엔드는 Prettier로 포맷합니다. 설정은 `frontend/.prettierrc.json`입니다.
+
+```bash
+ruff check . && ruff format --check .
+cd frontend && pnpm format:check
+```
+
+API 오류는 `service/app/errors.py`의 `api_error(status, code, message, ...)`로 냅니다. 새 경로는 `create_app`에서 직접 정의하지 않고, 기존 모듈처럼 `router(...)` 팩토리를 가진 모듈로 추가합니다.
+
 ## 검증과 현재 한계
 
 온프레미스 등록·배포의 설정, API, 가짜 서버 브라우저 검증 도우미와 미검증 항목은 [온프레미스 서비스 연결](ONPREM_SERVICE.md)을 참고합니다. 최신 마이그레이션 `0010`은 기존 AWS 데이터를 보존합니다.

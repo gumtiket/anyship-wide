@@ -2,6 +2,12 @@
 line-length = 100
 target-version = "py310"
 src = ["service", "infra/adapters", "scripts"]
+# 샘플 앱은 신뢰 해시로 바이트를 고정하므로 손대지 않는다.
+extend-exclude = ["AI/samples"]
+
+[format]
+# 문서 안의 코드 예시는 읽기 쉽게 직접 맞춘다.
+exclude = ["*.md"]
 
 [lint]
 select = ["E", "F", "I", "UP", "B"]
