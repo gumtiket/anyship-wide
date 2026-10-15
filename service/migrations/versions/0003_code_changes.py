@@ -1,6 +1,7 @@
 """Persist reviewed changes and real GitHub publication checkpoints."""
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "0003"
 down_revision = "0002"
@@ -12,7 +13,9 @@ def upgrade():
     op.create_table(
         "code_changes",
         sa.Column("id", sa.String(36), primary_key=True),
-        sa.Column("project_id", sa.String(36), sa.ForeignKey("projects.id"), nullable=False, unique=True),
+        sa.Column(
+            "project_id", sa.String(36), sa.ForeignKey("projects.id"), nullable=False, unique=True
+        ),
         sa.Column("status", sa.String(24), nullable=False),
         sa.Column("base_sha", sa.String(64), nullable=False),
         sa.Column("base_tree", sa.String(64), nullable=False),

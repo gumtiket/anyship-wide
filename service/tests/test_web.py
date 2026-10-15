@@ -11,13 +11,14 @@ from app.config import Settings
 from app.db import Base, LoginSession, OAuthAttempt
 from app.github_api import DemoGitHub, GitHubFailure
 
-
 ORIGIN = "http://localhost:8000"
 
 
 @pytest.fixture
 def web(tmp_path, database_url):
-    app = create_app(Settings(demo=True, database_url=database_url, demo_workspaces=tmp_path / "demo-workspaces"))
+    app = create_app(
+        Settings(demo=True, database_url=database_url, demo_workspaces=tmp_path / "demo-workspaces")
+    )
     Base.metadata.create_all(app.state.engine)
     with TestClient(app, base_url=ORIGIN) as client:
         yield app, client
@@ -57,7 +58,10 @@ def test_another_user_cannot_read_project(web):
 def test_authentication_csrf_and_logout(web):
     app, client = web
     assert client.get("/api/projects").status_code == 401
-    assert client.post("/api/auth/demo", headers={"Origin": "https://attacker.invalid"}).status_code == 403
+    assert (
+        client.post("/api/auth/demo", headers={"Origin": "https://attacker.invalid"}).status_code
+        == 403
+    )
     headers = login(client)
     assert add(client, {}).status_code == 403
     assert add(client, {**headers, "Origin": "https://attacker.invalid"}).status_code == 403
@@ -113,7 +117,13 @@ class FakeGitHub(DemoGitHub):
 @pytest.fixture
 def real_web(database_url):
     gateway = FakeGitHub()
-    settings = Settings(database_url=database_url, token_key=Fernet.generate_key().decode(), github_client_id="test", github_client_secret="secret", github_app_slug="test-app")
+    settings = Settings(
+        database_url=database_url,
+        token_key=Fernet.generate_key().decode(),
+        github_client_id="test",
+        github_client_secret="secret",
+        github_app_slug="test-app",
+    )
     app = create_app(settings, gateway)
     Base.metadata.create_all(app.state.engine)
     with TestClient(app, base_url=ORIGIN) as client:
@@ -133,10 +143,16 @@ def test_oauth_binding_one_time_state_and_encrypted_token(real_web):
     app, client, gateway = real_web
     state = oauth_start(client)
     with TestClient(app, base_url=ORIGIN) as other:
-        result = other.get("/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False)
+        result = other.get(
+            "/api/auth/github/callback",
+            params={"state": state, "code": "code"},
+            follow_redirects=False,
+        )
         assert "auth_error" in result.headers["location"]
         assert gateway.exchange_calls == []
-    result = client.get("/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False)
+    result = client.get(
+        "/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False
+    )
     assert result.headers["location"] == "/"
     assert client.get("/api/me").json()["user"]["login"] == "real-user"
     with app.state.sessions() as session:
@@ -164,7 +180,9 @@ def test_real_login_reuses_workspace_and_expired_oauth_is_rejected(real_web):
         attempt = session.scalar(select(OAuthAttempt))
         attempt.expires_at = int(time.time()) - 1
         session.commit()
-    failed = client.get("/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False)
+    failed = client.get(
+        "/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False
+    )
     assert "auth_error" in failed.headers["location"]
     assert not gateway.exchange_calls
     state = oauth_start(client)
@@ -186,34 +204,50 @@ def test_production_cannot_enable_demo_or_http():
 
 def test_login_reports_safe_github_error_code(real_web, monkeypatch, caplog):
     _, client, gateway = real_web
+
     def fail_exchange(*args):
         raise GitHubFailure(401, "incorrect_client_credentials")
+
     monkeypatch.setattr(gateway, "exchange", fail_exchange)
     state = oauth_start(client)
-    result = client.get("/api/auth/github/callback", params={"state": state, "code": "sensitive-code"}, follow_redirects=False)
+    result = client.get(
+        "/api/auth/github/callback",
+        params={"state": state, "code": "sensitive-code"},
+        follow_redirects=False,
+    )
     assert result.headers["location"] == "/?auth_error=incorrect_client_credentials"
     assert "incorrect_client_credentials" in caplog.text
     assert "sensitive-code" not in caplog.text
-    assert "app_oauth=\"\"" in result.headers["set-cookie"]
+    assert 'app_oauth=""' in result.headers["set-cookie"]
 
 
 def test_unknown_github_error_is_not_reflected(real_web, monkeypatch, caplog):
     _, client, gateway = real_web
+
     def fail_exchange(*args):
         raise GitHubFailure(401, "arbitrary-sensitive-upstream-detail")
+
     monkeypatch.setattr(gateway, "exchange", fail_exchange)
     state = oauth_start(client)
-    result = client.get("/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False)
+    result = client.get(
+        "/api/auth/github/callback", params={"state": state, "code": "code"}, follow_redirects=False
+    )
     assert result.headers["location"] == "/?auth_error=github_error"
     assert "arbitrary-sensitive-upstream-detail" not in caplog.text
 
 
 def test_exchange_keeps_only_safe_reason(monkeypatch):
     from app.github_api import GitHubAPI
+
     gateway = GitHubAPI()
-    monkeypatch.setattr(gateway, "_request", lambda *args, **kwargs: {
-        "error": "incorrect_client_credentials", "error_description": "sensitive-upstream-detail"
-    })
+    monkeypatch.setattr(
+        gateway,
+        "_request",
+        lambda *args, **kwargs: {
+            "error": "incorrect_client_credentials",
+            "error_description": "sensitive-upstream-detail",
+        },
+    )
     with pytest.raises(GitHubFailure) as caught:
         gateway.exchange(Settings(demo=True), "code", "verifier")
     assert caught.value.code == "incorrect_client_credentials"

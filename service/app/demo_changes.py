@@ -1,11 +1,11 @@
 """Deterministic local-only stand-in for AI modification. Never contacts GitHub."""
+
 import ast
 import hashlib
 import os
-from pathlib import Path
 import subprocess
 import uuid
-
+from pathlib import Path
 
 FILE_NAME = "ai_analysis_placeholder.py"
 CONTENT = (
@@ -32,14 +32,34 @@ def git(path, *args):
     env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0")
     try:
-        result = subprocess.run([
-            "git", "-c", "core.hooksPath=" + str(path / ".disabled-hooks"),
-            "-c", "commit.gpgSign=false", "-c", "core.autocrlf=false",
-            "-c", "user.name=Demo User", "-c", "user.email=demo@example.com", *args,
-        ], cwd=path, env=env, text=True, encoding="utf-8", capture_output=True, check=True, timeout=20)
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                "core.hooksPath=" + str(path / ".disabled-hooks"),
+                "-c",
+                "commit.gpgSign=false",
+                "-c",
+                "core.autocrlf=false",
+                "-c",
+                "user.name=Demo User",
+                "-c",
+                "user.email=demo@example.com",
+                *args,
+            ],
+            cwd=path,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=True,
+            timeout=20,
+        )
         return result.stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        raise DemoFailure("로컬 Git 작업에 실패했습니다. Git 설치와 작업 폴더 상태를 확인해 주세요.") from None
+        raise DemoFailure(
+            "로컬 Git 작업에 실패했습니다. Git 설치와 작업 폴더 상태를 확인해 주세요."
+        ) from None
 
 
 def apply(root, change_id, content):
@@ -47,7 +67,10 @@ def apply(root, change_id, content):
     if not path.exists():
         path.mkdir(parents=True)
         git(path, "init", "--initial-branch=main")
-        (path / "README.md").write_text("# Local demo fixture\n\nThis repository is an offline sample, not a clone of a GitHub repository.\n", encoding="utf-8")
+        (path / "README.md").write_text(
+            "# Local demo fixture\n\nThis repository is an offline sample, not a clone of a GitHub repository.\n",
+            encoding="utf-8",
+        )
         git(path, "add", "README.md")
         git(path, "commit", "-m", "chore: initialize local demo fixture")
         git(path, "checkout", "-b", f"demo/placeholder-{change_id[:8]}")

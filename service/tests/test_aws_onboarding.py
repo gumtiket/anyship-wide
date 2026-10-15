@@ -1,22 +1,23 @@
 """Exercise Service APIs with real auth/session handling and a fake AWS adapter."""
+
+import threading
+import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from types import SimpleNamespace
-import threading
-import time
 from urllib.parse import parse_qs, urlsplit
-import uuid
 
+import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import pytest
 from sqlalchemy import func, select, update
 
 from app.app import create_app
 from app.aws_adapter import AwsCheckError, AwsIdentity
 from app.config import Settings
 from app.db import AwsEnvironment, Base, LoginSession, Membership
-from tests.test_web import FakeGitHub, ORIGIN, oauth_start
+from tests.test_web import ORIGIN, FakeGitHub, oauth_start
 
 ENDPOINT = "/api/aws/environments"
 ROLE = "arn:aws:iam::123456789012:role/deploy-service-role"
@@ -47,10 +48,16 @@ def authenticate(client):
 
 @pytest.fixture
 def aws_web(database_url):
-    settings = Settings(database_url=database_url, token_key=Fernet.generate_key().decode(),
-                        github_client_id="test", github_client_secret="test", github_app_slug="test",
-                        aws_template_url=TEMPLATE, aws_service_role_arn=SERVICE_ROLE,
-                        aws_regions=("ap-northeast-2", "us-east-1"))
+    settings = Settings(
+        database_url=database_url,
+        token_key=Fernet.generate_key().decode(),
+        github_client_id="test",
+        github_client_secret="test",
+        github_app_slug="test",
+        aws_template_url=TEMPLATE,
+        aws_service_role_arn=SERVICE_ROLE,
+        aws_regions=("ap-northeast-2", "us-east-1"),
+    )
     adapter = FakeAWS()
     app = create_app(settings, FakeGitHub(), aws_adapter=adapter)
     Base.metadata.create_all(app.state.engine)
@@ -59,16 +66,28 @@ def aws_web(database_url):
 
 
 def create(client, headers, **changes):
-    return client.post(ENDPOINT, headers=headers,
-                       json={"request_id": str(uuid.uuid4()), "name": "운영 AWS", "region": "ap-northeast-2", **changes})
+    return client.post(
+        ENDPOINT,
+        headers=headers,
+        json={
+            "request_id": str(uuid.uuid4()),
+            "name": "운영 AWS",
+            "region": "ap-northeast-2",
+            **changes,
+        },
+    )
 
 
 def verify(client, headers, identifier, role=ROLE, **changes):
-    return client.post(f"{ENDPOINT}/{identifier}/verify", headers=headers, json={"role_arn": role, **changes})
+    return client.post(
+        f"{ENDPOINT}/{identifier}/verify", headers=headers, json={"role_arn": role, **changes}
+    )
 
 
 def save_role(client, headers, identifier, role=ROLE, **changes):
-    return client.post(f"{ENDPOINT}/{identifier}/role", headers=headers, json={"role_arn": role, **changes})
+    return client.post(
+        f"{ENDPOINT}/{identifier}/role", headers=headers, json={"role_arn": role, **changes}
+    )
 
 
 def test_url_creation_retries_and_configuration_snapshot(aws_web):
@@ -77,7 +96,9 @@ def test_url_creation_retries_and_configuration_snapshot(aws_web):
     response = create(client, headers, request_id=request_id)
     assert response.status_code == 201
     row = response.json()
-    assert row["status"] == "PENDING" and row["role_arn"] is None and row["submitted_role_arn"] is None
+    assert (
+        row["status"] == "PENDING" and row["role_arn"] is None and row["submitted_role_arn"] is None
+    )
     parsed = urlsplit(row["cloudformation_url"])
     assert parsed.hostname == "ap-northeast-2.console.aws.amazon.com"
     params = parse_qs(parsed.fragment.split("?", 1)[1])
@@ -100,7 +121,9 @@ def test_url_creation_retries_and_configuration_snapshot(aws_web):
     assert len(client.get(ENDPOINT + "?limit=1&offset=1").json()) == 1
     assert client.get("/api/config").json()["aws_regions"] == list(settings.aws_regions)
     # A restart/settings update must not rotate an already-issued trust contract.
-    restarted = create_app(replace(settings, aws_template_url=TEMPLATE + "2"), FakeGitHub(), aws_adapter=adapter)
+    restarted = create_app(
+        replace(settings, aws_template_url=TEMPLATE + "2"), FakeGitHub(), aws_adapter=adapter
+    )
     with TestClient(restarted, base_url=ORIGIN) as returning:
         returning.cookies.update(client.cookies)
         assert returning.get(ENDPOINT + "/" + row["id"]).json() == row
@@ -118,7 +141,9 @@ def test_verified_persistence_idempotence_and_relogin(aws_web):
     assert saved["role_arn"] == ROLE and saved["aws_account_id"] == "123456789012"
     assert saved["submitted_role_arn"] == ROLE
     assert saved["verified_at"] and saved["cloudformation_url"] is None
-    assert adapter.calls == [{"role_arn": ROLE, "external_id": external_id, "region": "ap-northeast-2"}]
+    assert adapter.calls == [
+        {"role_arn": ROLE, "external_id": external_id, "region": "ap-northeast-2"}
+    ]
     assert verify(client, headers, row["id"]).json() == saved and len(adapter.calls) == 1
     assert verify(client, headers, row["id"], ROLE + "other").status_code == 409
     assert save_role(client, headers, row["id"]).json() == saved
@@ -132,7 +157,9 @@ def test_verified_persistence_idempotence_and_relogin(aws_web):
 
 
 @pytest.mark.parametrize("previous_error", [None, "service_credentials_unavailable"])
-def test_without_adapter_saves_waits_and_resumes_same_registration(aws_web, monkeypatch, previous_error):
+def test_without_adapter_saves_waits_and_resumes_same_registration(
+    aws_web, monkeypatch, previous_error
+):
     import boto3
 
     def forbid_aws(*args, **kwargs):
@@ -171,17 +198,22 @@ def test_without_adapter_saves_waits_and_resumes_same_registration(aws_web, monk
     assert client.get("/api/config").json()["aws_verification_available"]
     verified = verify(client, headers, row["id"]).json()
     assert verified["status"] == "CONNECTED" and verified["role_arn"] == ROLE
-    assert adapter.calls == [{"role_arn": ROLE, "external_id": external_id, "region": row["region"]}]
+    assert adapter.calls == [
+        {"role_arn": ROLE, "external_id": external_id, "region": row["region"]}
+    ]
     disconnected_app = create_app(settings, FakeGitHub())
     with TestClient(disconnected_app, base_url=ORIGIN) as disconnected:
         disconnected.cookies.update(client.cookies)
         assert verify(disconnected, headers, row["id"]).json() == verified
 
 
-@pytest.mark.parametrize("state, code, status", [
-    ("VERIFYING", "verification_in_progress", 409),
-    ("EXPIRED", "request_expired", 410),
-])
+@pytest.mark.parametrize(
+    "state, code, status",
+    [
+        ("VERIFYING", "verification_in_progress", 409),
+        ("EXPIRED", "request_expired", 410),
+    ],
+)
 def test_missing_adapter_respects_auth_expiry_and_active_verification(aws_web, state, code, status):
     app, client, _, headers, settings = aws_web
     row = create(client, headers).json()
@@ -213,8 +245,14 @@ def test_access_control_and_client_cannot_override_server_values(aws_web):
     assert create(client, {}).status_code == 403
     assert verify(client, {}, row["id"]).status_code == 403
     assert save_role(client, {}, row["id"]).status_code == 403
-    assert verify(client, {**headers, "Origin": "https://elsewhere.invalid"}, row["id"]).status_code == 403
-    assert save_role(client, {**headers, "Origin": "https://elsewhere.invalid"}, row["id"]).status_code == 403
+    assert (
+        verify(client, {**headers, "Origin": "https://elsewhere.invalid"}, row["id"]).status_code
+        == 403
+    )
+    assert (
+        save_role(client, {**headers, "Origin": "https://elsewhere.invalid"}, row["id"]).status_code
+        == 403
+    )
     assert create(client, headers, external_id="forged").status_code == 422
     assert verify(client, headers, row["id"], external_id="forged").status_code == 422
     assert save_role(client, headers, row["id"], external_id="forged").status_code == 422
@@ -232,8 +270,14 @@ def test_access_control_and_client_cannot_override_server_values(aws_web):
         # Membership in the same workspace still does not grant access to another user's request.
         with app.state.sessions() as session:
             original = session.get(AwsEnvironment, row["id"])
-            other_login = session.scalar(select(LoginSession).where(LoginSession.csrf == other_headers["X-CSRF-Token"]))
-            session.add(Membership(user_id=other_login.user_id, workspace_id=original.workspace_id, role="owner"))
+            other_login = session.scalar(
+                select(LoginSession).where(LoginSession.csrf == other_headers["X-CSRF-Token"])
+            )
+            session.add(
+                Membership(
+                    user_id=other_login.user_id, workspace_id=original.workspace_id, role="owner"
+                )
+            )
             other_login.workspace_id = original.workspace_id
             session.commit()
         assert other.get(ENDPOINT).json() == []
@@ -242,8 +286,15 @@ def test_access_control_and_client_cannot_override_server_values(aws_web):
     assert not adapter.calls
 
 
-@pytest.mark.parametrize("role", ["bad", "arn:aws:iam::123456789012:user/name",
-    "arn:aws:sts::123456789012:assumed-role/name/session", "arn:aws-cn:iam::123456789012:role/name"])
+@pytest.mark.parametrize(
+    "role",
+    [
+        "bad",
+        "arn:aws:iam::123456789012:user/name",
+        "arn:aws:sts::123456789012:assumed-role/name/session",
+        "arn:aws-cn:iam::123456789012:role/name",
+    ],
+)
 def test_invalid_roles_never_reach_aws(aws_web, role):
     _, client, adapter, headers, _ = aws_web
     row = create(client, headers).json()
@@ -253,18 +304,26 @@ def test_invalid_roles_never_reach_aws(aws_web, role):
     assert not adapter.calls
 
 
-@pytest.mark.parametrize("error", [AwsCheckError("access_denied"), AwsCheckError("external_id_not_required"),
-                                  AwsCheckError("service_credentials_unavailable"),
-                                  RuntimeError("SECRET-ACCESS-KEY SESSION-TOKEN")])
+@pytest.mark.parametrize(
+    "error",
+    [
+        AwsCheckError("access_denied"),
+        AwsCheckError("external_id_not_required"),
+        AwsCheckError("service_credentials_unavailable"),
+        RuntimeError("SECRET-ACCESS-KEY SESSION-TOKEN"),
+    ],
+)
 def test_failure_is_safe_and_can_retry(aws_web, error, caplog):
     app, client, adapter, headers, _ = aws_web
     row = create(client, headers).json()
     adapter.error = error
+
     def assert_input_committed():
         with app.state.sessions() as session:
             stored = session.get(AwsEnvironment, row["id"])
             assert stored.submitted_role_arn == ROLE and stored.role_arn is None
             assert stored.status == "VERIFYING"
+
     adapter.hook = assert_input_committed
     response = verify(client, headers, row["id"])
     assert response.status_code in (403, 422, 503)
@@ -343,17 +402,30 @@ def test_lease_recovery_and_late_result_cannot_overwrite_new_attempt(aws_web, er
     row = create(client, headers).json()
     with app.state.sessions() as session:
         stored = session.get(AwsEnvironment, row["id"])
-        stored.status, stored.lease_until, stored.verification_token = "VERIFYING", int(time.time()) - 1, "old"
+        stored.status, stored.lease_until, stored.verification_token = (
+            "VERIFYING",
+            int(time.time()) - 1,
+            "old",
+        )
         session.commit()
     assert client.get(ENDPOINT + "/" + row["id"]).json()["error_code"] == "verification_interrupted"
+
     def supersede():
         with app.state.sessions() as session:
-            session.execute(update(AwsEnvironment).where(AwsEnvironment.id == row["id"]).values(verification_token="new"))
+            session.execute(
+                update(AwsEnvironment)
+                .where(AwsEnvironment.id == row["id"])
+                .values(verification_token="new")
+            )
             session.commit()
+
     adapter.hook = supersede
     adapter.error = error
     response = verify(client, headers, row["id"])
-    assert response.status_code == 409 and response.json()["detail"]["code"] == "verification_superseded"
+    assert (
+        response.status_code == 409
+        and response.json()["detail"]["code"] == "verification_superseded"
+    )
     with app.state.sessions() as session:
         stored = session.get(AwsEnvironment, row["id"])
         assert stored.role_arn is None and stored.verification_token == "new"
@@ -363,9 +435,11 @@ def test_concurrent_verification_calls_adapter_once(aws_web):
     app, client, adapter, headers, _ = aws_web
     row = create(client, headers).json()
     entered, release = threading.Event(), threading.Event()
+
     def block():
         entered.set()
         assert release.wait(10)
+
     adapter.hook = block
     with TestClient(app, base_url=ORIGIN) as second, ThreadPoolExecutor(max_workers=1) as pool:
         second.cookies.update(client.cookies)
@@ -392,9 +466,19 @@ def test_same_verified_role_cannot_be_registered_twice(aws_web):
     assert save_role(client, headers, second["id"]).status_code == 200
     assert verify(client, headers, first["id"]).status_code == 200
     response = verify(client, headers, second["id"])
-    assert response.status_code == 409 and response.json()["detail"]["code"] == "role_already_registered"
+    assert (
+        response.status_code == 409
+        and response.json()["detail"]["code"] == "role_already_registered"
+    )
     with app.state.sessions() as session:
-        assert session.scalar(select(func.count()).select_from(AwsEnvironment).where(AwsEnvironment.status == "CONNECTED")) == 1
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AwsEnvironment)
+                .where(AwsEnvironment.status == "CONNECTED")
+            )
+            == 1
+        )
         assert session.get(AwsEnvironment, second["id"]).role_arn is None
         assert session.get(AwsEnvironment, second["id"]).submitted_role_arn == ROLE
 
@@ -406,11 +490,13 @@ def test_saving_after_lease_expiry_rejects_late_verification_result(aws_web, err
     replacement = ROLE + "-corrected"
     with TestClient(app, base_url=ORIGIN) as second:
         second.cookies.update(client.cookies)
+
         def save_new_input():
             with app.state.sessions() as session:
                 session.get(AwsEnvironment, row["id"]).lease_until = int(time.time()) - 1
                 session.commit()
             assert save_role(second, headers, row["id"], replacement).status_code == 200
+
         adapter.hook = save_new_input
         adapter.error = error
         response = verify(client, headers, row["id"])
@@ -426,8 +512,10 @@ def test_configuration_missing_changed_and_unsupported_regions(aws_web):
     assert create(client, headers, region="eu-west-1").status_code == 422
     assert create(client, headers, name="  ").status_code == 422
     row = create(client, headers).json()
-    for configured, code in ((replace(settings, aws_template_url=""), "aws_not_configured"),
-                             (replace(settings, aws_service_role_arn=SERVICE_ROLE + "new"), "configuration_changed")):
+    for configured, code in (
+        (replace(settings, aws_template_url=""), "aws_not_configured"),
+        (replace(settings, aws_service_role_arn=SERVICE_ROLE + "new"), "configuration_changed"),
+    ):
         other_app = create_app(configured, FakeGitHub(), aws_adapter=adapter)
         with TestClient(other_app, base_url=ORIGIN) as other:
             other.cookies.update(client.cookies)
@@ -441,12 +529,15 @@ def test_configuration_missing_changed_and_unsupported_regions(aws_web):
     assert not adapter.calls
 
 
-@pytest.mark.parametrize("changes, issues", [
-    ({"aws_template_url": "", "aws_service_role_arn": ""}, ["template", "service_role"]),
-    ({"aws_regions": ()}, ["regions"]),
-    ({"demo": True}, ["live_mode"]),
-    ({}, []),
-])
+@pytest.mark.parametrize(
+    "changes, issues",
+    [
+        ({"aws_template_url": "", "aws_service_role_arn": ""}, ["template", "service_role"]),
+        ({"aws_regions": ()}, ["regions"]),
+        ({"demo": True}, ["live_mode"]),
+        ({}, []),
+    ],
+)
 def test_config_reports_setup_gaps_without_exposing_values(aws_web, changes, issues):
     _, _, adapter, _, settings = aws_web
     app = create_app(replace(settings, **changes), FakeGitHub(), aws_adapter=adapter)
@@ -466,9 +557,12 @@ def test_config_reports_setup_gaps_without_exposing_values(aws_web, changes, iss
 @pytest.mark.parametrize("error", [None, AwsCheckError("access_denied")])
 def test_request_expiring_during_validation_is_not_saved(aws_web, monkeypatch, error):
     from app import aws_onboarding
+
     _, client, adapter, headers, _ = aws_web
     row = create(client, headers).json()
-    adapter.hook = lambda: monkeypatch.setattr(aws_onboarding, "time", SimpleNamespace(time=lambda: row["expires_at"]))
+    adapter.hook = lambda: monkeypatch.setattr(
+        aws_onboarding, "time", SimpleNamespace(time=lambda: row["expires_at"])
+    )
     adapter.error = error
     response = verify(client, headers, row["id"])
     assert response.status_code == 410 and not response.json()["detail"]["retryable"]
@@ -479,7 +573,11 @@ def test_request_expiring_during_validation_is_not_saved(aws_web, monkeypatch, e
 
 def test_unique_role_name_option_and_demo_registration_disabled(aws_web):
     _, client, adapter, headers, settings = aws_web
-    app = create_app(replace(settings, aws_role_name="deploy-service-role-{id}"), FakeGitHub(), aws_adapter=adapter)
+    app = create_app(
+        replace(settings, aws_role_name="deploy-service-role-{id}"),
+        FakeGitHub(),
+        aws_adapter=adapter,
+    )
     with TestClient(app, base_url=ORIGIN) as alternate:
         alternate.cookies.update(client.cookies)
         row = create(alternate, headers).json()
@@ -496,9 +594,11 @@ def test_concurrent_create_returns_one_request_and_external_id(aws_web):
     app, client, _, headers, _ = aws_web
     request_id = str(uuid.uuid4())
     gate = threading.Barrier(2)
+
     def start(browser):
         gate.wait(timeout=10)
         return create(browser, headers, request_id=request_id)
+
     with TestClient(app, base_url=ORIGIN) as second, ThreadPoolExecutor(max_workers=2) as pool:
         second.cookies.update(client.cookies)
         first, another = pool.submit(start, client), pool.submit(start, second)

@@ -7,8 +7,10 @@
 
 안전망일 뿐이다. 어댑터는 처음부터 메시지에 비밀을 넣지 않아야 한다.
 """
+
 import re
-from typing import Mapping, TypeVar
+from collections.abc import Mapping
+from typing import TypeVar
 
 from pydantic import JsonValue
 
@@ -39,8 +41,9 @@ ModelT = TypeVar("ModelT", bound=AdapterModel)
 
 def redact_text(text: str, secrets: Mapping[str, str] | None = None) -> str:
     # 긴 값부터 처리해야 비밀의 뒷부분이 남지 않는다.
-    for value in sorted({v for v in (secrets or {}).values() if len(v) >= MIN_SECRET_LENGTH},
-                        key=len, reverse=True):
+    for value in sorted(
+        {v for v in (secrets or {}).values() if len(v) >= MIN_SECRET_LENGTH}, key=len, reverse=True
+    ):
         text = text.replace(value, MASK)
     for pattern in _PATTERNS:
         text = pattern.sub(MASK, text)

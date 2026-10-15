@@ -7,7 +7,9 @@
 실행하고, 로그 이벤트를 사용자에게 흘려보낸다. 실패는 예외가 아니라 `ok=False`
 결과로 돌려준다(예상하지 못한 버그는 그대로 예외가 된다).
 """
-from typing import Callable, Protocol
+
+from collections.abc import Callable
+from typing import Protocol
 
 from .models import (
     CheckResult,

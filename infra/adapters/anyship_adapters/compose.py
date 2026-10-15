@@ -17,11 +17,13 @@ Compose를 쓰는 세트(온프레미스, aws-always-on)가 함께 쓰는 모듈
   .env      Compose 치환용(POSTGRES_PASSWORD)
   app.env   앱 컨테이너의 환경변수(일반 설정, 생성한 비밀, 사용자가 입력한 비밀)
 """
+
 import json
 import re
 import secrets as _secrets
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from .models import IMAGE_TAG_PATTERN
 from .spec import check_value, parse_spec, reject
@@ -32,7 +34,8 @@ DB_NAME = "app"
 _DB_PASSWORD = re.compile(r"^[A-Za-z0-9]{16,128}$")
 # 외부 DB 주소: 앱 전용 계정(소문자·숫자·밑줄), 영숫자 비밀번호, RDS 주소, SSL 필수. 환경 파일에 그대로 쓰이므로 엄격하게 검사한다.
 _DATABASE_URL = re.compile(
-    r"^postgresql://[a-z][a-z0-9_]{0,62}:[A-Za-z0-9]{16,128}@[a-z0-9][a-z0-9.-]{0,252}:[0-9]{4,5}/[a-z][a-z0-9_]{0,62}\?sslmode=require$")
+    r"^postgresql://[a-z][a-z0-9_]{0,62}:[A-Za-z0-9]{16,128}@[a-z0-9][a-z0-9.-]{0,252}:[0-9]{4,5}/[a-z][a-z0-9_]{0,62}\?sslmode=require$"
+)
 # 소문자 DNS 이름(점으로 구분된 2개 이상의 라벨, 라벨은 63자 이하). Host(`...`) 규칙에 들어간다.
 _HOST = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 
@@ -79,11 +82,17 @@ def render_stack(
                   이 주소를 앱의 DATABASE_URL로 쓴다. 비밀번호가 들어 있어 app.env에만 쓴다.
     """
     if len(host) > 253 or not _HOST.match(host):
-        raise reject("invalid_host", "앱의 공개 주소 형식이 올바르지 않습니다.",
-                     hint="소문자, 숫자, 하이픈으로 된 도메인 이름이어야 합니다.")
+        raise reject(
+            "invalid_host",
+            "앱의 공개 주소 형식이 올바르지 않습니다.",
+            hint="소문자, 숫자, 하이픈으로 된 도메인 이름이어야 합니다.",
+        )
     if not re.match(IMAGE_TAG_PATTERN, image_tag):
-        raise reject("invalid_image_tag", "이미지 태그 형식이 올바르지 않습니다.",
-                     hint="커밋 SHA(16진수 7~40자)를 사용해 주세요.")
+        raise reject(
+            "invalid_image_tag",
+            "이미지 태그 형식이 올바르지 않습니다.",
+            hint="커밋 SHA(16진수 7~40자)를 사용해 주세요.",
+        )
 
     parsed = parse_spec(spec)
     provided = dict(secrets or {})
@@ -111,8 +120,11 @@ def render_stack(
         check_value(var.name, value)
         app_lines.append(_env_line(var.name, value))
     if missing:
-        raise reject("missing_secret", "필요한 비밀 값이 입력되지 않았습니다: " + ", ".join(missing),
-                     hint="배포 화면에서 해당 값을 입력해 주세요.")
+        raise reject(
+            "missing_secret",
+            "필요한 비밀 값이 입력되지 않았습니다: " + ", ".join(missing),
+            hint="배포 화면에서 해당 값을 입력해 주세요.",
+        )
     unused = sorted(set(provided) - expected_inputs)
     if unused:
         warnings.append("명세에 없는 비밀 입력은 사용하지 않았습니다: " + ", ".join(unused))
@@ -130,16 +142,25 @@ def render_stack(
         password = previous.get("POSTGRES_PASSWORD")
         if password:
             if not _DB_PASSWORD.match(password):
-                raise reject("invalid_env_value", "서버에 저장된 DB 비밀번호 형식이 올바르지 않습니다.",
-                             hint="서버의 앱 디렉터리 .env 파일을 확인해 주세요.")
+                raise reject(
+                    "invalid_env_value",
+                    "서버에 저장된 DB 비밀번호 형식이 올바르지 않습니다.",
+                    hint="서버의 앱 디렉터리 .env 파일을 확인해 주세요.",
+                )
         else:
             password = new_token()
             generated.append("POSTGRES_PASSWORD")
         compose_env = _env_line("POSTGRES_PASSWORD", password) + "\n"
 
     return RenderedStack(
-        compose_yaml=_compose_yaml(parsed.app, image_tag, parsed.port, host,
-                                   postgres=parsed.postgres and not external_db, internal_network=not external_db),
+        compose_yaml=_compose_yaml(
+            parsed.app,
+            image_tag,
+            parsed.port,
+            host,
+            postgres=parsed.postgres and not external_db,
+            internal_network=not external_db,
+        ),
         compose_env=compose_env,
         app_env="".join(line + "\n" for line in app_lines),
         warnings=tuple(warnings),
@@ -147,8 +168,9 @@ def render_stack(
     )
 
 
-def _compose_yaml(app: str, image_tag: str, port: int, host: str, *, postgres: bool,
-                  internal_network: bool = True) -> str:
+def _compose_yaml(
+    app: str, image_tag: str, port: int, host: str, *, postgres: bool, internal_network: bool = True
+) -> str:
     # 여기에 들어가는 값은 모두 검증된 형식(앱 이름, 태그, 포트, 호스트)이다.
     labels = [
         "traefik.enable=true",
@@ -218,8 +240,13 @@ def _compose_yaml(app: str, image_tag: str, port: int, host: str, *, postgres: b
             "    pids_limit: 200",
         ]
     lines += ["networks:", "  traefik:", "    external: true"]
-    if internal_network:  # 외부 DB를 쓰면 앱이 VPC의 RDS에 닿아야 하므로 막힌 네트워크를 만들지 않는다
-        lines += ["  internal:", "    internal: true"]  # 인터넷으로 나가는 길이 없는 앱 전용 네트워크
+    if (
+        internal_network
+    ):  # 외부 DB를 쓰면 앱이 VPC의 RDS에 닿아야 하므로 막힌 네트워크를 만들지 않는다
+        lines += [
+            "  internal:",
+            "    internal: true",
+        ]  # 인터넷으로 나가는 길이 없는 앱 전용 네트워크
     if postgres:
         lines += ["volumes:", "  db-data: {}"]
     return "\n".join(lines) + "\n"

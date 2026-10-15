@@ -10,6 +10,7 @@
 
 실패는 TerraformError(AdapterError 포함)로 던진다. 호출하는 어댑터가 결과의 오류로 바꾼다.
 """
+
 import json
 import os
 import re
@@ -17,9 +18,10 @@ import subprocess
 import tempfile
 import threading
 from collections import deque
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Mapping
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -44,13 +46,21 @@ class TerraformError(Exception):
         self.error, self.tail = error, tail
 
 
-def _fail(code: str, message: str, hint: str | None = None, retryable: bool = False, tail: str = "") -> TerraformError:
-    return TerraformError(AdapterError(code=code, message=message, hint=hint, retryable=retryable), tail)
+def _fail(
+    code: str, message: str, hint: str | None = None, retryable: bool = False, tail: str = ""
+) -> TerraformError:
+    return TerraformError(
+        AdapterError(code=code, message=message, hint=hint, retryable=retryable), tail
+    )
 
 
 # 공용 기반 출력 이름 -> AwsEnvironment 필드. infra/user-account/outputs.tf와 같아야 한다.
-_OUTPUTS = {"host_public_ip": "host", "db_address": "db_address", "db_port": "db_port",
-            "db_master_secret_arn": "db_secret_arn"}
+_OUTPUTS = {
+    "host_public_ip": "host",
+    "db_address": "db_address",
+    "db_port": "db_port",
+    "db_master_secret_arn": "db_secret_arn",
+}
 _ACTIVE: set[tuple[str, str, str]] = set()  # 지금 실행 중인 (버킷, 환경 ID, state 이름)
 _GUARD = threading.Lock()
 
@@ -62,30 +72,55 @@ def apply_outputs(env: AwsEnvironment, text: str) -> AwsEnvironment:
     except ValueError:
         raise _fail("terraform_output_invalid", "Terraform 출력을 읽지 못했습니다.") from None
     if data == {}:  # 기반이 아직 없거나 모두 지워진 state
-        raise _fail("foundation_missing", "공용 기반이 아직 만들어지지 않았습니다.",
-                    hint="공용 기반을 먼저 만들어 주세요.")
-    missing = [name for name in _OUTPUTS
-               if not (isinstance(data, dict) and isinstance(data.get(name), dict) and "value" in data[name])]
+        raise _fail(
+            "foundation_missing",
+            "공용 기반이 아직 만들어지지 않았습니다.",
+            hint="공용 기반을 먼저 만들어 주세요.",
+        )
+    missing = [
+        name
+        for name in _OUTPUTS
+        if not (
+            isinstance(data, dict) and isinstance(data.get(name), dict) and "value" in data[name]
+        )
+    ]
     if missing:
-        raise _fail("terraform_output_invalid", "Terraform 출력에 필요한 항목이 없습니다: " + ", ".join(missing))
+        raise _fail(
+            "terraform_output_invalid",
+            "Terraform 출력에 필요한 항목이 없습니다: " + ", ".join(missing),
+        )
     try:  # 값은 로그나 오류에 싣지 않고, 틀린 필드 이름만 알린다
-        return AwsEnvironment.model_validate({**env.model_dump(), **{field: data[name]["value"]
-                                                                       for name, field in _OUTPUTS.items()}})
+        return AwsEnvironment.model_validate(
+            {**env.model_dump(), **{field: data[name]["value"] for name, field in _OUTPUTS.items()}}
+        )
     except ValidationError as exc:
         fields = set()
         for err in exc.errors():
             if err["loc"]:
                 fields.add(str(err["loc"][0]))
             else:  # 모델 수준 검증(계정 일치 등)은 위치가 없고, 우리가 쓴 메시지에 필드 이름이 들어 있다
-                fields.update(name for name in ("state_bucket", "db_secret_arn") if name in err["msg"])
-        raise _fail("terraform_output_invalid",
-                    "Terraform 출력 값의 형식이 올바르지 않습니다: " + ", ".join(sorted(fields) or ["환경 정보"])) from None
+                fields.update(
+                    name for name in ("state_bucket", "db_secret_arn") if name in err["msg"]
+                )
+        raise _fail(
+            "terraform_output_invalid",
+            "Terraform 출력 값의 형식이 올바르지 않습니다: "
+            + ", ".join(sorted(fields) or ["환경 정보"]),
+        ) from None
 
 
 class TerraformRunner:
-    def __init__(self, module_dir: Path, *, access: AwsAccess | None = None, binary: str = "terraform",
-                 state_name: str = "foundation", plugin_cache_dir: Path | None = None, timeout: float = 2700,
-                 popen=subprocess.Popen):
+    def __init__(
+        self,
+        module_dir: Path,
+        *,
+        access: AwsAccess | None = None,
+        binary: str = "terraform",
+        state_name: str = "foundation",
+        plugin_cache_dir: Path | None = None,
+        timeout: float = 2700,
+        popen=subprocess.Popen,
+    ):
         if not _STATE_NAME.match(state_name):
             raise ValueError("invalid state name")
         self._dir, self._access, self._binary = Path(module_dir), access or AwsAccess(), binary
@@ -94,7 +129,12 @@ class TerraformRunner:
 
     def plan(self, env: AwsEnvironment, variables: Mapping[str, Any], log: LogFn) -> bool:
         """변경이 있으면 True. 아무것도 만들거나 바꾸지 않는다."""
-        return self._run(env, variables, log, ["plan", "-detailed-exitcode"], (0, 2), "terraform_plan_failed") == 2
+        return (
+            self._run(
+                env, variables, log, ["plan", "-detailed-exitcode"], (0, 2), "terraform_plan_failed"
+            )
+            == 2
+        )
 
     def apply(self, env: AwsEnvironment, variables: Mapping[str, Any], log: LogFn) -> None:
         self._run(env, variables, log, ["apply", "-auto-approve"], (0,), "terraform_apply_failed")
@@ -112,8 +152,12 @@ class TerraformRunner:
         key = (env.state_bucket or "", env.env_id, self._state_name)
         with _GUARD:
             if key in _ACTIVE:
-                raise _fail("terraform_locked", "같은 환경에서 다른 Terraform 작업이 실행 중입니다.",
-                            hint="그 작업이 끝난 뒤 다시 시도해 주세요.", retryable=True)
+                raise _fail(
+                    "terraform_locked",
+                    "같은 환경에서 다른 Terraform 작업이 실행 중입니다.",
+                    hint="그 작업이 끝난 뒤 다시 시도해 주세요.",
+                    retryable=True,
+                )
             _ACTIVE.add(key)
         try:
             yield
@@ -123,8 +167,11 @@ class TerraformRunner:
 
     def _check(self, env: AwsEnvironment, variables: Mapping[str, Any]) -> str:
         if env.state_bucket is None:
-            raise _fail("foundation_missing", "사용자 계정의 공용 기반 정보가 없습니다: state_bucket",
-                        hint="온보딩 스택 출력의 StateBucketName을 환경 정보에 넣어 주세요.")
+            raise _fail(
+                "foundation_missing",
+                "사용자 계정의 공용 기반 정보가 없습니다: state_bucket",
+                hint="온보딩 스택 출력의 StateBucketName을 환경 정보에 넣어 주세요.",
+            )
         if not any(self._dir.glob("*.tf")):
             raise _fail("terraform_module_missing", "실행할 Terraform 모듈을 찾지 못했습니다.")
         bad = [name for name in variables if not isinstance(name, str) or not _VAR_NAME.match(name)]
@@ -133,13 +180,22 @@ class TerraformRunner:
         try:
             json.dumps(dict(variables))
         except (TypeError, ValueError):
-            raise _fail("invalid_terraform_input", "Terraform 변수 값을 JSON으로 만들 수 없습니다.") from None
+            raise _fail(
+                "invalid_terraform_input", "Terraform 변수 값을 JSON으로 만들 수 없습니다."
+            ) from None
         return _BUCKET.match(env.state_bucket).group(1)  # 버킷이 있는 리전(이름에 들어 있다)
 
     def _environment(self, credentials: TemporaryCredentials, work: Path) -> dict[str, str]:
-        process = {**safe_env(), **credentials.environ(), "TF_DATA_DIR": str(work / "data"), "TF_IN_AUTOMATION": "1",
-                   "TF_INPUT": "0", "AWS_EC2_METADATA_DISABLED": "true",  # 자격 증명이 잘못돼도 인스턴스 역할로 폴백하지 않는다
-                   "AWS_SHARED_CREDENTIALS_FILE": os.devnull, "AWS_CONFIG_FILE": os.devnull}
+        process = {
+            **safe_env(),
+            **credentials.environ(),
+            "TF_DATA_DIR": str(work / "data"),
+            "TF_IN_AUTOMATION": "1",
+            "TF_INPUT": "0",
+            "AWS_EC2_METADATA_DISABLED": "true",  # 자격 증명이 잘못돼도 인스턴스 역할로 폴백하지 않는다
+            "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+            "AWS_CONFIG_FILE": os.devnull,
+        }
         if self._cache:
             process["TF_PLUGIN_CACHE_DIR"] = str(self._cache)
         return process
@@ -147,9 +203,13 @@ class TerraformRunner:
     def _run(self, env, variables, log, command, ok_codes, failure_code, capture=None) -> int:
         bucket_region = self._check(env, variables or {})
         with self._exclusive(env):
-            return self._run_exclusive(env, variables, log, command, ok_codes, failure_code, capture, bucket_region)
+            return self._run_exclusive(
+                env, variables, log, command, ok_codes, failure_code, capture, bucket_region
+            )
 
-    def _run_exclusive(self, env, variables, log, command, ok_codes, failure_code, capture, bucket_region) -> int:
+    def _run_exclusive(
+        self, env, variables, log, command, ok_codes, failure_code, capture, bucket_region
+    ) -> int:
         try:
             credentials = self._access.temporary_credentials(env)
         except AwsAccessError as exc:
@@ -163,21 +223,56 @@ class TerraformRunner:
                 variable_file.write_text(json.dumps(dict(variables)), encoding="utf-8")
                 variable_file.chmod(0o600)
                 flags = ["-input=false", "-no-color", f"-var-file={variable_file}"]
-            process, base = self._environment(credentials, work), [self._binary, f"-chdir={self._dir}"]
-            backend = [f"-backend-config=bucket={env.state_bucket}", f"-backend-config=region={bucket_region}",
-                       f"-backend-config=key={env.env_id}/{self._state_name}.tfstate"]
-            self._execute(base + ["init", "-input=false", "-no-color", "-reconfigure", *backend], process, secrets,
-                          log, 1, "terraform init", (0,), "terraform_init_failed")
-            return self._execute(base + [*command, *flags], process, secrets, log, 2, f"terraform {command[0]}",
-                                 ok_codes, failure_code, capture)
+            process, base = (
+                self._environment(credentials, work),
+                [self._binary, f"-chdir={self._dir}"],
+            )
+            backend = [
+                f"-backend-config=bucket={env.state_bucket}",
+                f"-backend-config=region={bucket_region}",
+                f"-backend-config=key={env.env_id}/{self._state_name}.tfstate",
+            ]
+            self._execute(
+                base + ["init", "-input=false", "-no-color", "-reconfigure", *backend],
+                process,
+                secrets,
+                log,
+                1,
+                "terraform init",
+                (0,),
+                "terraform_init_failed",
+            )
+            return self._execute(
+                base + [*command, *flags],
+                process,
+                secrets,
+                log,
+                2,
+                f"terraform {command[0]}",
+                ok_codes,
+                failure_code,
+                capture,
+            )
 
-    def _execute(self, args, process, secrets, log, step, label, ok_codes, failure_code, capture=None) -> int:
+    def _execute(
+        self, args, process, secrets, log, step, label, ok_codes, failure_code, capture=None
+    ) -> int:
         log(LogEvent(step=step, total=2, name=label, message=f"{label} 실행"))
         try:
-            child = self._popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                env=process, text=True, encoding="utf-8", errors="replace")
+            child = self._popen(
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=process,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
         except FileNotFoundError:
-            raise _fail("terraform_not_found", "서비스 서버에서 terraform을 찾을 수 없습니다.") from None
+            raise _fail(
+                "terraform_not_found", "서비스 서버에서 terraform을 찾을 수 없습니다."
+            ) from None
         timed_out, tail = [], deque(maxlen=TAIL_LINES)
 
         def expire():
@@ -196,20 +291,38 @@ class TerraformRunner:
                     tail.append(line)
                     log(LogEvent(step=step, total=2, name=label, message=line))
             code = child.wait()
-        except BaseException:  # 로그 함수가 예외를 던지거나 작업이 취소되면 Terraform을 남겨 두지 않는다
+        except (
+            BaseException
+        ):  # 로그 함수가 예외를 던지거나 작업이 취소되면 Terraform을 남겨 두지 않는다
             child.kill()
             child.wait()
             raise
         finally:
             timer.cancel()
-        text = "\n".join(tail) if capture is None else redact_text("".join(capture)[-2000:], secrets)
+        text = (
+            "\n".join(tail) if capture is None else redact_text("".join(capture)[-2000:], secrets)
+        )
         if timed_out:
-            raise _fail("terraform_timeout", "Terraform이 제한 시간 안에 끝나지 않아 중단했습니다.",
-                        hint="다시 실행하면 만들어진 것은 이어서 진행됩니다.", retryable=True, tail=text)
+            raise _fail(
+                "terraform_timeout",
+                "Terraform이 제한 시간 안에 끝나지 않아 중단했습니다.",
+                hint="다시 실행하면 만들어진 것은 이어서 진행됩니다.",
+                retryable=True,
+                tail=text,
+            )
         if code in ok_codes:
             return code
         if "Error acquiring the state lock" in text:
-            raise _fail("terraform_locked", "같은 환경에서 다른 Terraform 작업이 실행 중입니다.",
-                        hint="그 작업이 끝난 뒤 다시 시도해 주세요.", retryable=True, tail=text)
-        raise _fail(failure_code, f"{label}이(가) 실패했습니다.", retryable=failure_code != "terraform_init_failed",
-                    tail=text)
+            raise _fail(
+                "terraform_locked",
+                "같은 환경에서 다른 Terraform 작업이 실행 중입니다.",
+                hint="그 작업이 끝난 뒤 다시 시도해 주세요.",
+                retryable=True,
+                tail=text,
+            )
+        raise _fail(
+            failure_code,
+            f"{label}이(가) 실패했습니다.",
+            retryable=failure_code != "terraform_init_failed",
+            tail=text,
+        )

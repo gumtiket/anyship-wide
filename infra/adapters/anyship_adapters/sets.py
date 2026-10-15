@@ -2,6 +2,7 @@
 
 AI 쪽(AI/ai/src/ai/spec)이 세트를 고를 때 쓰는 이름과 같아서, 선택 결과를
 그대로 어댑터에 넘길 수 있다."""
+
 from typing import Literal
 
 SetName = Literal["aws-serverless", "aws-always-on", "onprem"]

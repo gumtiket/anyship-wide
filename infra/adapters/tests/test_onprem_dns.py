@@ -1,11 +1,10 @@
 import pytest
+from fakes import Log
+from specs import GENERATED
+from test_onprem import ENV, adapter, deploy, server
 
 from anyship_adapters.dns import DnsError
 from anyship_adapters.models import AdapterError
-
-from fakes import Log
-from specs import GENERATED
-from test_onprem import ENV, TAG, adapter, deploy, server
 
 FAKE_TOKEN = "gh" + "p_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 
@@ -29,8 +28,11 @@ class FakeRecords:
         return self._changed
 
 
-DNS_ERROR = AdapterError(code="dns_change_failed", message="DNS 레코드를 바꾸지 못했습니다.",
-                         hint="서비스 서버 역할의 Route 53 권한을 확인해 주세요.")
+DNS_ERROR = AdapterError(
+    code="dns_change_failed",
+    message="DNS 레코드를 바꾸지 못했습니다.",
+    hint="서비스 서버 역할의 Route 53 권한을 확인해 주세요.",
+)
 
 
 def commands(srv):
@@ -87,7 +89,9 @@ def test_a_dns_failure_stops_the_deploy_before_anything_is_sent_to_the_server():
 def test_an_unknown_public_ip_stops_the_deploy_without_calling_dns():
     records = FakeRecords()
     result = deploy(server(**{"curl": (0, b"10.0.0.5", b"")}), dns=records)
-    assert result.error.code == "public_ip_unknown" and result.error.retryable and records.calls == []
+    assert (
+        result.error.code == "public_ip_unknown" and result.error.retryable and records.calls == []
+    )
 
 
 def test_an_unreachable_server_is_reported_before_dns_is_touched():
@@ -98,7 +102,9 @@ def test_an_unreachable_server_is_reported_before_dns_is_touched():
 
 def test_an_invalid_input_is_rejected_before_dns_is_touched():
     records = FakeRecords()
-    result = adapter(server(), dns=records).deploy(ENV, GENERATED, "NOT A TAG", {}, Log(), set_name="onprem")
+    result = adapter(server(), dns=records).deploy(
+        ENV, GENERATED, "NOT A TAG", {}, Log(), set_name="onprem"
+    )
     assert not result.ok and records.calls == []
 
 
@@ -136,7 +142,11 @@ def test_a_removal_failure_is_returned_as_an_error():
 def test_a_secret_in_a_removal_error_never_reaches_the_log_or_the_result():
     error, log = AdapterError(code="dns_change_failed", message=f"실패 {FAKE_TOKEN}"), Log()
     result = adapter(server(), dns=FakeRecords(error=error)).remove_environment_dns(ENV, log)
-    assert not result.ok and FAKE_TOKEN not in log.text() and FAKE_TOKEN not in result.model_dump_json()
+    assert (
+        not result.ok
+        and FAKE_TOKEN not in log.text()
+        and FAKE_TOKEN not in result.model_dump_json()
+    )
 
 
 def test_destroying_one_app_never_removes_the_environments_record():

@@ -1,9 +1,9 @@
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from cryptography.fernet import Fernet
-import pytest
 from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.exc import DataError
 
@@ -28,10 +28,25 @@ def transfer_databases(tmp_path, database_url):
     cipher = Fernet(Fernet.generate_key())
     encrypted = cipher.encrypt(b"fixture-github-token").decode()
     with source.begin() as connection:
-        connection.execute(User.__table__.insert(), {"id": "u1", "github_id": 9000000000, "login": "anyship-test", "name": "테스트 사용자"})
+        connection.execute(
+            User.__table__.insert(),
+            {"id": "u1", "github_id": 9000000000, "login": "anyship-test", "name": "테스트 사용자"},
+        )
         connection.execute(Workspace.__table__.insert(), {"id": "w1", "name": "테스트 작업 공간"})
-        connection.execute(Membership.__table__.insert(), {"user_id": "u1", "workspace_id": "w1", "role": "owner"})
-        connection.execute(LoginSession.__table__.insert(), {"id": "s1", "user_id": "u1", "workspace_id": "w1", "token_cipher": encrypted, "csrf": "test", "expires_at": 9000000000})
+        connection.execute(
+            Membership.__table__.insert(), {"user_id": "u1", "workspace_id": "w1", "role": "owner"}
+        )
+        connection.execute(
+            LoginSession.__table__.insert(),
+            {
+                "id": "s1",
+                "user_id": "u1",
+                "workspace_id": "w1",
+                "token_cipher": encrypted,
+                "csrf": "test",
+                "expires_at": 9000000000,
+            },
+        )
     try:
         yield source, target, cipher
     finally:
@@ -39,7 +54,9 @@ def transfer_databases(tmp_path, database_url):
         target.dispose()
 
 
-def test_migrations_and_transfer_preserve_unicode_large_ids_and_encrypted_tokens(transfer_databases):
+def test_migrations_and_transfer_preserve_unicode_large_ids_and_encrypted_tokens(
+    transfer_databases,
+):
     source, target, cipher = transfer_databases
     assert set(inspect(target).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
     counts = copy_sqlite_snapshot(source, target)
@@ -67,4 +84,7 @@ def test_postgresql_constraint_failure_rolls_back_entire_transfer(transfer_datab
     with pytest.raises(DataError):
         copy_sqlite_snapshot(source, target)
     with target.connect() as connection:
-        assert all(connection.scalar(select(func.count()).select_from(table)) == 0 for table in Base.metadata.sorted_tables)
+        assert all(
+            connection.scalar(select(func.count()).select_from(table)) == 0
+            for table in Base.metadata.sorted_tables
+        )

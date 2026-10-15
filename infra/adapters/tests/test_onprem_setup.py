@@ -5,7 +5,12 @@ import subprocess
 
 import pytest
 
-from anyship_adapters.onprem_setup import SETUP_SCRIPT, TRAEFIK_COMPOSE, SetupScriptError, render_setup_script
+from anyship_adapters.onprem_setup import (
+    SETUP_SCRIPT,
+    TRAEFIK_COMPOSE,
+    SetupScriptError,
+    render_setup_script,
+)
 
 KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dkJ3Bl1Z6 service-server-deploy"
 EMAIL = "ops@example.com"
@@ -22,14 +27,27 @@ def test_the_script_holds_the_public_key_the_email_and_the_original_setup_steps(
 
 def test_the_embedded_traefik_compose_file_is_exactly_the_repositorys_file():
     script = render_setup_script(KEY, EMAIL)
-    encoded = re.search(r"echo '([A-Za-z0-9+/=]+)' \| base64 -d > /opt/apps/traefik/compose.yaml", script).group(1)
+    encoded = re.search(
+        r"echo '([A-Za-z0-9+/=]+)' \| base64 -d > /opt/apps/traefik/compose.yaml", script
+    ).group(1)
     assert base64.b64decode(encoded) == TRAEFIK_COMPOSE.read_bytes()
 
 
 def test_the_steps_come_in_the_order_prepare_the_server_then_start_traefik_as_the_deploy_account():
     script = render_setup_script(KEY, EMAIL)
-    positions = [script.index(text) for text in ("DEPLOY_PUBLIC_KEY=", "dnf install -y docker", "useradd", "--- done",
-                                                 "base64 -d", "ACME_EMAIL", "runuser -u deploy", "--- traefik started")]
+    positions = [
+        script.index(text)
+        for text in (
+            "DEPLOY_PUBLIC_KEY=",
+            "dnf install -y docker",
+            "useradd",
+            "--- done",
+            "base64 -d",
+            "ACME_EMAIL",
+            "runuser -u deploy",
+            "--- traefik started",
+        )
+    ]
     assert positions == sorted(positions)
 
 
@@ -45,22 +63,50 @@ def test_the_script_contains_no_secret_looking_content():
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash가 필요하다")
 def test_the_script_is_valid_shell():
     # 표준 입력으로 넘긴다(Windows 경로의 백슬래시가 bash에서 깨지는 것을 피하고 줄바꿈도 그대로 보낸다).
-    checked = subprocess.run(["bash", "-n"], input=render_setup_script(KEY, EMAIL).encode(), capture_output=True)
+    checked = subprocess.run(
+        ["bash", "-n"], input=render_setup_script(KEY, EMAIL).encode(), capture_output=True
+    )
     assert checked.returncode == 0, checked.stderr.decode(errors="replace")[:300]
 
 
-@pytest.mark.parametrize("key", [
-    "", "ssh-rsa AAAAB3NzaC1yc2E" + "A" * 40, "ssh-ed25519 notbase64", "-----BEGIN OPENSSH PRIVATE KEY-----",
-    KEY + "\nssh-ed25519 AAAA" + "A" * 40,  # 줄이 둘이면 authorized_keys에 다른 키를 끼워 넣을 수 있다
-    KEY.replace("AAAA", "AAAA'; rm -rf /; echo '", 1), KEY + "'", KEY + " " + "x" * 80, None, 12345])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "",
+        "ssh-rsa AAAAB3NzaC1yc2E" + "A" * 40,
+        "ssh-ed25519 notbase64",
+        "-----BEGIN OPENSSH PRIVATE KEY-----",
+        KEY
+        + "\nssh-ed25519 AAAA"
+        + "A" * 40,  # 줄이 둘이면 authorized_keys에 다른 키를 끼워 넣을 수 있다
+        KEY.replace("AAAA", "AAAA'; rm -rf /; echo '", 1),
+        KEY + "'",
+        KEY + " " + "x" * 80,
+        None,
+        12345,
+    ],
+)
 def test_anything_but_a_single_ed25519_public_key_line_is_refused(key):
     with pytest.raises(SetupScriptError) as caught:
         render_setup_script(key, EMAIL)
     assert "BEGIN" not in str(caught.value) and "rm -rf" not in str(caught.value)
 
 
-@pytest.mark.parametrize("email", ["", "no-at-sign", "a b@example.com", "a@b", "a@example.com'; echo x; '", "a@example.com\nb",
-                                   "@example.com", "x" * 70 + "@example.com", None, 5])
+@pytest.mark.parametrize(
+    "email",
+    [
+        "",
+        "no-at-sign",
+        "a b@example.com",
+        "a@b",
+        "a@example.com'; echo x; '",
+        "a@example.com\nb",
+        "@example.com",
+        "x" * 70 + "@example.com",
+        None,
+        5,
+    ],
+)
 def test_an_email_that_could_break_the_script_or_is_not_an_address_is_refused(email):
     with pytest.raises(SetupScriptError):
         render_setup_script(KEY, email)

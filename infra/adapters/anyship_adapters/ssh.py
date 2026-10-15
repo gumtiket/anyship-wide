@@ -7,13 +7,15 @@
   * 비밀번호를 묻지 않는다(키 로그인 전용). 물어야 하는 상황이면 멈추지 않고 실패한다.
   * 출력에는 비밀이 섞일 수 있다. 로그로 내보내기 전에 호출하는 쪽이 redact를 적용한다.
 """
+
 import os
 import re
 import shlex
 import subprocess
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, Callable, Sequence
+from typing import IO
 
 _HOST = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$")
 _USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -82,31 +84,57 @@ class SshRunner:
     def _command(self, remote: Sequence[str]) -> list[str]:
         conn = self.connection
         options = [
-            "-i", str(conn.key_path), "-p", str(conn.port), "-T",
-            "-o", "BatchMode=yes",
-            "-o", "IdentitiesOnly=yes",
-            "-o", "PasswordAuthentication=no",
-            "-o", f"ConnectTimeout={self._connect_timeout}",
-            "-o", "ServerAliveInterval=15",
+            "-i",
+            str(conn.key_path),
+            "-p",
+            str(conn.port),
+            "-T",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "IdentitiesOnly=yes",
+            "-o",
+            "PasswordAuthentication=no",
+            "-o",
+            f"ConnectTimeout={self._connect_timeout}",
+            "-o",
+            "ServerAliveInterval=15",
             # 처음 접속한 서버의 키는 기록해 두고 이후 바뀌면 거부한다(첫 접속만 신뢰).
-            "-o", "StrictHostKeyChecking=accept-new",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
         ]
         if self._known_hosts:
             options += ["-o", f"UserKnownHostsFile={self._known_hosts}"]
         return ["ssh", *options, f"{conn.user}@{conn.host}", shlex.join(remote)]
 
-    def run(self, args: Sequence[str], *, timeout: float = 60,
-            input: str | bytes | None = None, stdin: IO[bytes] | None = None) -> CommandResult:
+    def run(
+        self,
+        args: Sequence[str],
+        *,
+        timeout: float = 60,
+        input: str | bytes | None = None,
+        stdin: IO[bytes] | None = None,
+    ) -> CommandResult:
         """원격에서 명령을 실행한다. 실패는 예외가 아니라 결과의 returncode로 알린다.
 
         input은 작은 내용을 통째로, stdin은 큰 내용(이미지 등)을 스트림으로 흘려보낼 때 쓴다."""
-        if not args or any("\0" in arg for arg in args) or (input is not None and stdin is not None):
+        if (
+            not args
+            or any("\0" in arg for arg in args)
+            or (input is not None and stdin is not None)
+        ):
             raise ValueError("invalid remote command")
         data = input.encode() if isinstance(input, str) else input
         feed = {"stdin": stdin} if stdin is not None else {"input": data}
         try:
-            done = self._runner(self._command(args), capture_output=True,
-                                timeout=timeout, env=safe_env(), check=False, **feed)
+            done = self._runner(
+                self._command(args),
+                capture_output=True,
+                timeout=timeout,
+                env=safe_env(),
+                check=False,
+                **feed,
+            )
         except subprocess.TimeoutExpired as exc:
             return CommandResult(124, _text(exc.stdout), _text(exc.stderr), timed_out=True)
         return CommandResult(done.returncode, _text(done.stdout), _text(done.stderr))
@@ -116,11 +144,17 @@ class SshRunner:
         다른 서버의 표준 입력으로 그대로 흘려보낼 때 쓴다. 기다리고 정리하는 것은 호출하는 쪽의 몫이다."""
         if not args or any("\0" in arg for arg in args):
             raise ValueError("invalid remote command")
-        return self._popen(self._command(args), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           stdin=subprocess.DEVNULL, env=safe_env())
+        return self._popen(
+            self._command(args),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            env=safe_env(),
+        )
 
-    def put(self, remote_path: str, data: str | bytes, *, mode: str = "0644",
-            timeout: float = 30) -> CommandResult:
+    def put(
+        self, remote_path: str, data: str | bytes, *, mode: str = "0644", timeout: float = 30
+    ) -> CommandResult:
         """원격에 파일을 쓴다. 비밀 파일이 잠깐이라도 다른 사람에게 읽히지 않게 비공개로 만든 뒤
         권한을 맞추고, 임시 파일을 옮겨서 한 번에 교체한다."""
         if not _REMOTE_PATH.match(remote_path) or ".." in remote_path or not _MODE.match(mode):

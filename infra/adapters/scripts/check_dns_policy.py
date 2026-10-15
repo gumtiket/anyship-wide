@@ -8,6 +8,7 @@
 그 밖의 이름과 종류는 AccessDenied여야 한다.
 값은 문서용 시험 대역(192.0.2.1)만 쓰고, 거부되어야 할 요청이 통과해 버리면 바로 지운다.
 """
+
 import argparse
 import sys
 
@@ -24,24 +25,34 @@ def expect(label: str, condition: bool) -> None:
 
 
 def record(name: str, kind: str = "A") -> dict:
-    return {"Name": name, "Type": kind, "TTL": 60,
-            "ResourceRecords": [{"Value": TEST_IP if kind == "A" else '"anyship-policy-test"'}]}
+    return {
+        "Name": name,
+        "Type": kind,
+        "TTL": 60,
+        "ResourceRecords": [{"Value": TEST_IP if kind == "A" else '"anyship-policy-test"'}],
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--domain", default="anyship.cloud")
-    parser.add_argument("--env-id", default="policytest", help="시험용 환경 ID(기존 환경 ID는 쓰지 마세요)")
+    parser.add_argument(
+        "--env-id", default="policytest", help="시험용 환경 ID(기존 환경 ID는 쓰지 마세요)"
+    )
     args = parser.parse_args()
     domain, client = args.domain, boto3.client("route53")
-    zone = client.list_hosted_zones_by_name(DNSName=f"{domain}.", MaxItems="1")["HostedZones"][0]["Id"]
+    zone = client.list_hosted_zones_by_name(DNSName=f"{domain}.", MaxItems="1")["HostedZones"][0][
+        "Id"
+    ]
     created: list[dict] = []  # 만들어졌다면 반드시 지워야 하는 레코드
 
     def change(action: str, rec: dict) -> str:
         """'ok' 또는 AWS 오류 코드를 돌려준다."""
         try:
-            client.change_resource_record_sets(HostedZoneId=zone, ChangeBatch={
-                "Changes": [{"Action": action, "ResourceRecordSet": rec}]})
+            client.change_resource_record_sets(
+                HostedZoneId=zone,
+                ChangeBatch={"Changes": [{"Action": action, "ResourceRecordSet": rec}]},
+            )
             return "ok"
         except ClientError as error:
             return error.response["Error"]["Code"]
@@ -55,7 +66,10 @@ def main() -> int:
     ]
     for scope in scopes:
         must_be_denied += [
-            (f"와일드카드가 아닌 이름(www.env.{scope})", record(f"www.{args.env_id}.{scope}.{domain}")),
+            (
+                f"와일드카드가 아닌 이름(www.env.{scope})",
+                record(f"www.{args.env_id}.{scope}.{domain}"),
+            ),
             (f"같은 이름의 TXT 종류({scope})", record(f"*.{args.env_id}.{scope}.{domain}", "TXT")),
         ]
     try:
@@ -66,7 +80,9 @@ def main() -> int:
                 created.append(rec)
             expect(f"{rec['Name']} 만들기 ({outcome})", outcome == "ok")
             if outcome == "AccessDenied":
-                print("      정책이 너무 좁습니다. 정규화된 이름 패턴(끝의 점 등)과 이 범위가 허용 목록에 있는지 확인하세요.")
+                print(
+                    "      정책이 너무 좁습니다. 정규화된 이름 패턴(끝의 점 등)과 이 범위가 허용 목록에 있는지 확인하세요."
+                )
 
         print("2) 거부되어야 할 요청")
         for label, rec in must_be_denied:

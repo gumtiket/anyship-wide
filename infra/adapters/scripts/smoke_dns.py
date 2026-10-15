@@ -11,6 +11,7 @@
 기존 레코드는 건드리지 않는다. 시험용 환경 ID(기본 dnstest)의 레코드만 만들고 지우며,
 시작과 끝에 영역의 전체 레코드 목록을 비교해서 다른 레코드가 그대로인지 확인한다.
 """
+
 import argparse
 import socket
 import sys
@@ -38,11 +39,15 @@ def timed(call):
 def snapshot(domain: str) -> set[tuple[str, str, str]]:
     """영역의 모든 레코드를 (이름, 종류, 값)의 집합으로 돌려준다."""
     client = boto3.client("route53")
-    zone = client.list_hosted_zones_by_name(DNSName=f"{domain}.", MaxItems="1")["HostedZones"][0]["Id"]
+    zone = client.list_hosted_zones_by_name(DNSName=f"{domain}.", MaxItems="1")["HostedZones"][0][
+        "Id"
+    ]
     found = set()
     for page in client.get_paginator("list_resource_record_sets").paginate(HostedZoneId=zone):
         for record in page["ResourceRecordSets"]:
-            values = [r["Value"] for r in record.get("ResourceRecords", [])] or [str(record.get("AliasTarget"))]
+            values = [r["Value"] for r in record.get("ResourceRecords", [])] or [
+                str(record.get("AliasTarget"))
+            ]
             found.add((record["Name"], record["Type"], ",".join(sorted(values))))
     return found
 
@@ -62,12 +67,22 @@ def resolves_to(host: str, ip: str, seconds: int = 90) -> float | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ip", required=True, help="시험 레코드가 가리킬 공인 IP(온프레미스 서버의 IP)")
-    parser.add_argument("--env-id", default="dnstest", help="시험용 환경 ID(기존 환경 ID는 쓰지 마세요)")
-    parser.add_argument("--existing-env", default="demo", help="이미 레코드가 있는 환경(읽기만 확인)")
+    parser.add_argument(
+        "--ip", required=True, help="시험 레코드가 가리킬 공인 IP(온프레미스 서버의 IP)"
+    )
+    parser.add_argument(
+        "--env-id", default="dnstest", help="시험용 환경 ID(기존 환경 ID는 쓰지 마세요)"
+    )
+    parser.add_argument(
+        "--existing-env", default="demo", help="이미 레코드가 있는 환경(읽기만 확인)"
+    )
     parser.add_argument("--domain", default="anyship.cloud")
-    parser.add_argument("--scope", choices=SCOPES, default="onprem",
-                        help="레코드 이름의 범위: onprem(*.<환경ID>.onprem.<도메인>) 또는 aws(*.<환경ID>.aws.<도메인>)")
+    parser.add_argument(
+        "--scope",
+        choices=SCOPES,
+        default="onprem",
+        help="레코드 이름의 범위: onprem(*.<환경ID>.onprem.<도메인>) 또는 aws(*.<환경ID>.aws.<도메인>)",
+    )
     args = parser.parse_args()
     if args.env_id == args.existing_env:
         print("시험용 환경 ID가 기존 환경과 같습니다. 다른 값을 쓰세요.")
@@ -85,11 +100,18 @@ def main() -> int:
             before = snapshot(args.domain)
 
         print(f"1) 기존 환경({args.existing_env})의 와일드카드 이름 조회 확인 (쓰기 없음)")
-        existing = [r for r in before if r[0] == f"\\052.{args.existing_env}.{args.scope}.{args.domain}." and r[1] == "A"]
+        existing = [
+            r
+            for r in before
+            if r[0] == f"\\052.{args.existing_env}.{args.scope}.{args.domain}." and r[1] == "A"
+        ]
         if existing:
             current_ip = existing[0][2]
             changed = timed(lambda: records.ensure(args.existing_env, current_ip))
-            expect("이미 있는 레코드를 같은 값으로 ensure하면 변경이 없다(\\052 이름 조회가 맞다)", changed is False)
+            expect(
+                "이미 있는 레코드를 같은 값으로 ensure하면 변경이 없다(\\052 이름 조회가 맞다)",
+                changed is False,
+            )
         else:
             print(f"      {args.existing_env} 레코드가 없어 이 단계를 건너뜁니다.")
 

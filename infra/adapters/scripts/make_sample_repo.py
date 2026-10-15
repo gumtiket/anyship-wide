@@ -5,6 +5,7 @@ AI가 서비스에 붙기 전까지, 병합된 소스의 루트에 `Dockerfile`�
 
     python infra/adapters/scripts/make_sample_repo.py <출력 폴더>
 """
+
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,9 @@ def main() -> int:
         print(f"{target}이(가) 이미 있습니다. 새 폴더 이름을 지정하세요.")
         return 1
     shutil.copytree(SAMPLE, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
-    subprocess.run(["git", "apply", "--whitespace=nowarn", str(OUT / "changes.diff")], cwd=target, check=True)
+    subprocess.run(
+        ["git", "apply", "--whitespace=nowarn", str(OUT / "changes.diff")], cwd=target, check=True
+    )
     shutil.copy(OUT / "Dockerfile", target / "Dockerfile")
     shutil.copy(OUT / "deploy-spec.yaml", target / "deploy-spec.yaml")
     for name in EXCLUDE:

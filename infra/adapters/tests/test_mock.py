@@ -25,7 +25,11 @@ def aws():
 
 
 def spec(**override):
-    return {"app": "todo-a1b2", "backing_services": [{"type": "postgres", "bind_as": "DATABASE_URL"}], **override}
+    return {
+        "app": "todo-a1b2",
+        "backing_services": [{"type": "postgres", "bind_as": "DATABASE_URL"}],
+        **override,
+    }
 
 
 class Collector:
@@ -39,8 +43,14 @@ class Collector:
 def deploy(adapter, env, log=None, **kw):
     args = dict(spec=spec(), image_tag=TAG, secrets={}, set_name="onprem")
     args.update(kw)
-    return adapter.deploy(env, args["spec"], args["image_tag"], args["secrets"], log or Collector(),
-                          set_name=args["set_name"])
+    return adapter.deploy(
+        env,
+        args["spec"],
+        args["image_tag"],
+        args["secrets"],
+        log or Collector(),
+        set_name=args["set_name"],
+    )
 
 
 # --- 성공 흐름 ----------------------------------------------------------------------------
@@ -61,8 +71,13 @@ def test_deploy_reports_numbered_steps_in_order_and_returns_the_url(onprem):
 
 
 def test_urls_follow_the_set(aws):
-    assert deploy(MockAdapter(), aws, set_name="aws-always-on").url == "https://todo-a1b2.demo.aws.anyship.cloud"
-    assert deploy(MockAdapter(), aws, set_name="aws-serverless").url.endswith(".lambda-url.ap-northeast-2.on.aws/")
+    assert (
+        deploy(MockAdapter(), aws, set_name="aws-always-on").url
+        == "https://todo-a1b2.demo.aws.anyship.cloud"
+    )
+    assert deploy(MockAdapter(), aws, set_name="aws-serverless").url.endswith(
+        ".lambda-url.ap-northeast-2.on.aws/"
+    )
 
 
 def test_status_follows_the_lifecycle(onprem):
@@ -106,7 +121,9 @@ def test_deploy_fails_at_the_start_step_and_leaves_nothing_behind(onprem):
     adapter = MockAdapter("deploy_fails")
     log = Collector()
     result = deploy(adapter, onprem, log)
-    assert not result.ok and result.error.code == "container_start_failed" and result.error.retryable
+    assert (
+        not result.ok and result.error.code == "container_start_failed" and result.error.retryable
+    )
     assert log.events[-1].level == "error" and log.events[-1].step == 4
     assert adapter.status(onprem, "todo-a1b2").state == "not_deployed"
 
@@ -129,9 +146,14 @@ def test_unknown_scenario_is_rejected():
         ({"image_tag": "3f2a9c1; rm"}, "invalid_image_tag"),
         ({"spec": {"app": "Bad Name"}}, "invalid_spec"),
         ({"spec": {}}, "invalid_spec"),
-        ({"set_name": "aws-always-on"}, "set_not_supported"),  # 온프레미스 환경에 AWS 세트를 쓴 경우
-        ({"spec": spec(backing_services=[{"type": "object_storage", "bind_as": "STORAGE_URL"}])},
-         "unsupported_backing_service"),
+        (
+            {"set_name": "aws-always-on"},
+            "set_not_supported",
+        ),  # 온프레미스 환경에 AWS 세트를 쓴 경우
+        (
+            {"spec": spec(backing_services=[{"type": "object_storage", "bind_as": "STORAGE_URL"}])},
+            "unsupported_backing_service",
+        ),
     ],
 )
 def test_bad_deploy_requests_return_an_error(onprem, kwargs, code):
@@ -149,7 +171,9 @@ def test_rollback_needs_a_deployed_app_and_a_valid_tag(onprem):
     adapter = MockAdapter()
     assert adapter.rollback(onprem, "todo-a1b2", TAG, Collector()).error.code == "app_not_found"
     deploy(adapter, onprem)
-    assert adapter.rollback(onprem, "todo-a1b2", "nope", Collector()).error.code == "invalid_image_tag"
+    assert (
+        adapter.rollback(onprem, "todo-a1b2", "nope", Collector()).error.code == "invalid_image_tag"
+    )
 
 
 # --- 비밀 값 -----------------------------------------------------------------------------------------

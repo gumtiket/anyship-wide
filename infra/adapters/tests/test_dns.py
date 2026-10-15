@@ -2,26 +2,45 @@ import sys
 
 import pytest
 
-boto3 = pytest.importorskip("boto3")  # DNS 기능은 선택 의존성이라, 없으면 이 파일의 테스트만 건너뛴다
+boto3 = pytest.importorskip(
+    "boto3"
+)  # DNS 기능은 선택 의존성이라, 없으면 이 파일의 테스트만 건너뛴다
 from botocore.stub import Stubber  # noqa: E402
 
 from anyship_adapters.dns import DnsError, WildcardRecords  # noqa: E402
 
-ZONE = {"HostedZones": [{"Id": "/hostedzone/Z123", "Name": "anyship.cloud.", "CallerReference": "r",
-                         "Config": {"PrivateZone": False}}],
-        "DNSName": "anyship.cloud.", "IsTruncated": False, "MaxItems": "1"}
+ZONE = {
+    "HostedZones": [
+        {
+            "Id": "/hostedzone/Z123",
+            "Name": "anyship.cloud.",
+            "CallerReference": "r",
+            "Config": {"PrivateZone": False},
+        }
+    ],
+    "DNSName": "anyship.cloud.",
+    "IsTruncated": False,
+    "MaxItems": "1",
+}
 NAME = "\\052.demo.onprem.anyship.cloud."  # Route 53은 와일드카드(*)를 \052로 돌려준다
 RECORD = {"Name": NAME, "Type": "A", "TTL": 60, "ResourceRecords": [{"Value": "3.38.88.141"}]}
-CHANGE = {"ChangeInfo": {"Id": "/change/C1", "Status": "PENDING", "SubmittedAt": "2026-10-09T00:00:00Z"}}
-INSYNC = {"ChangeInfo": {"Id": "/change/C1", "Status": "INSYNC", "SubmittedAt": "2026-10-09T00:00:00Z"}}
+CHANGE = {
+    "ChangeInfo": {"Id": "/change/C1", "Status": "PENDING", "SubmittedAt": "2026-10-09T00:00:00Z"}
+}
+INSYNC = {
+    "ChangeInfo": {"Id": "/change/C1", "Status": "INSYNC", "SubmittedAt": "2026-10-09T00:00:00Z"}
+}
 FAKE_TOKEN = "gh" + "p_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 
 
 @pytest.fixture(autouse=True)
 def fake_aws_credentials(monkeypatch):
     # 진짜 자격 증명이 없어도 클라이언트를 만들 수 있게 하고, 실수로 진짜 AWS를 부르는 일을 막는다.
-    for key, value in {"AWS_ACCESS_KEY_ID": "test", "AWS_SECRET_ACCESS_KEY": "test",
-                       "AWS_DEFAULT_REGION": "ap-northeast-2"}.items():
+    for key, value in {
+        "AWS_ACCESS_KEY_ID": "test",
+        "AWS_SECRET_ACCESS_KEY": "test",
+        "AWS_DEFAULT_REGION": "ap-northeast-2",
+    }.items():
         monkeypatch.setenv(key, value)
 
 
@@ -30,8 +49,13 @@ def listed(records):
 
 
 def batch(action, record):
-    return {"HostedZoneId": "Z123", "ChangeBatch": {"Comment": "managed by anyship adapter",
-                                                    "Changes": [{"Action": action, "ResourceRecordSet": record}]}}
+    return {
+        "HostedZoneId": "Z123",
+        "ChangeBatch": {
+            "Comment": "managed by anyship adapter",
+            "Changes": [{"Action": action, "ResourceRecordSet": record}],
+        },
+    }
 
 
 def stubbed():
@@ -41,9 +65,14 @@ def stubbed():
 
 def expect_lookup(stub, records, zone=True, name=NAME):
     if zone:
-        stub.add_response("list_hosted_zones_by_name", ZONE, {"DNSName": "anyship.cloud.", "MaxItems": "1"})
-    stub.add_response("list_resource_record_sets", listed(records),
-                      {"HostedZoneId": "Z123", "StartRecordName": name, "StartRecordType": "A", "MaxItems": "1"})
+        stub.add_response(
+            "list_hosted_zones_by_name", ZONE, {"DNSName": "anyship.cloud.", "MaxItems": "1"}
+        )
+    stub.add_response(
+        "list_resource_record_sets",
+        listed(records),
+        {"HostedZoneId": "Z123", "StartRecordName": name, "StartRecordType": "A", "MaxItems": "1"},
+    )
 
 
 def expect_change(stub, expected=None):
@@ -55,8 +84,18 @@ def expect_change(stub, expected=None):
 def test_a_missing_record_is_created_with_an_upsert_of_the_wildcard_name():
     client, stub = stubbed()
     expect_lookup(stub, [])
-    expect_change(stub, batch("UPSERT", {"Name": "*.demo.onprem.anyship.cloud", "Type": "A", "TTL": 60,
-                                         "ResourceRecords": [{"Value": "3.38.88.141"}]}))
+    expect_change(
+        stub,
+        batch(
+            "UPSERT",
+            {
+                "Name": "*.demo.onprem.anyship.cloud",
+                "Type": "A",
+                "TTL": 60,
+                "ResourceRecords": [{"Value": "3.38.88.141"}],
+            },
+        ),
+    )
     with stub:
         assert WildcardRecords(client).ensure("demo", "3.38.88.141") is True
         stub.assert_no_pending_responses()
@@ -70,11 +109,17 @@ def test_a_record_that_already_has_the_right_value_is_left_alone():
         stub.assert_no_pending_responses()
 
 
-@pytest.mark.parametrize("current", [
-    {**RECORD, "ResourceRecords": [{"Value": "52.78.1.1"}]},  # 서버의 IP가 바뀜
-    {**RECORD, "TTL": 300},  # TTL이 다름
-    {**RECORD, "ResourceRecords": [{"Value": "3.38.88.141"}, {"Value": "52.78.1.1"}]},  # 값이 둘
-])
+@pytest.mark.parametrize(
+    "current",
+    [
+        {**RECORD, "ResourceRecords": [{"Value": "52.78.1.1"}]},  # 서버의 IP가 바뀜
+        {**RECORD, "TTL": 300},  # TTL이 다름
+        {
+            **RECORD,
+            "ResourceRecords": [{"Value": "3.38.88.141"}, {"Value": "52.78.1.1"}],
+        },  # 값이 둘
+    ],
+)
 def test_a_record_that_differs_is_updated(current):
     client, stub = stubbed()
     expect_lookup(stub, [current])
@@ -84,17 +129,22 @@ def test_a_record_that_differs_is_updated(current):
         stub.assert_no_pending_responses()
 
 
-@pytest.mark.parametrize("found", [
-    {**RECORD, "Name": "\\052.other.onprem.anyship.cloud."},  # 다른 환경의 레코드
-    # 같은 이름의 다른 종류. 값과 TTL이 우리 레코드와 똑같아도 A 레코드가 아니면 현재 값으로 보면 안 된다.
-    {**RECORD, "Type": "TXT"},
-])
+@pytest.mark.parametrize(
+    "found",
+    [
+        {**RECORD, "Name": "\\052.other.onprem.anyship.cloud."},  # 다른 환경의 레코드
+        # 같은 이름의 다른 종류. 값과 TTL이 우리 레코드와 똑같아도 A 레코드가 아니면 현재 값으로 보면 안 된다.
+        {**RECORD, "Type": "TXT"},
+    ],
+)
 def test_only_this_environments_a_record_counts_as_the_current_one(found):
     client, stub = stubbed()
     expect_lookup(stub, [found])
     expect_change(stub)
     with stub:
-        assert WildcardRecords(client).ensure("demo", "3.38.88.141") is True  # 못 찾았으니 새로 만든다
+        assert (
+            WildcardRecords(client).ensure("demo", "3.38.88.141") is True
+        )  # 못 찾았으니 새로 만든다
 
 
 # --- 지우기 ----------------------------------------------------------------------------------
@@ -107,10 +157,13 @@ def test_remove_deletes_the_record_exactly_as_route_53_returned_it():
         stub.assert_no_pending_responses()
 
 
-@pytest.mark.parametrize("found", [
-    {**RECORD, "Name": "\\052.other.onprem.anyship.cloud."},  # 다른 환경의 레코드
-    {**RECORD, "Type": "TXT"},  # 같은 이름의 A가 아닌 레코드
-])
+@pytest.mark.parametrize(
+    "found",
+    [
+        {**RECORD, "Name": "\\052.other.onprem.anyship.cloud."},  # 다른 환경의 레코드
+        {**RECORD, "Type": "TXT"},  # 같은 이름의 A가 아닌 레코드
+    ],
+)
 def test_remove_is_safe_to_repeat_and_never_touches_a_record_that_is_not_ours(found):
     client, stub = stubbed()
     expect_lookup(stub, [found])
@@ -131,11 +184,28 @@ def test_the_zone_is_looked_up_once_and_remembered():
         stub.assert_no_pending_responses()
 
 
-@pytest.mark.parametrize("zones", [
-    [],
-    [{"Id": "/hostedzone/Z9", "Name": "sub.anyship.cloud.", "CallerReference": "r", "Config": {"PrivateZone": False}}],
-    [{"Id": "/hostedzone/Z9", "Name": "anyship.cloud.", "CallerReference": "r", "Config": {"PrivateZone": True}}],
-])
+@pytest.mark.parametrize(
+    "zones",
+    [
+        [],
+        [
+            {
+                "Id": "/hostedzone/Z9",
+                "Name": "sub.anyship.cloud.",
+                "CallerReference": "r",
+                "Config": {"PrivateZone": False},
+            }
+        ],
+        [
+            {
+                "Id": "/hostedzone/Z9",
+                "Name": "anyship.cloud.",
+                "CallerReference": "r",
+                "Config": {"PrivateZone": True},
+            }
+        ],
+    ],
+)
 def test_a_missing_wrong_or_private_zone_is_reported(zones):
     client, stub = stubbed()
     stub.add_response("list_hosted_zones_by_name", {**ZONE, "HostedZones": zones})
@@ -152,19 +222,38 @@ class ExplodingClient:
         raise AssertionError(f"AWS를 호출하면 안 된다: {name}")
 
 
-@pytest.mark.parametrize("ip", ["10.0.0.5", "192.168.1.10", "172.16.0.1", "127.0.0.1", "169.254.169.254",
-                                "0.0.0.0", "100.64.0.1", "2001:db8::1", "::1", "not-an-ip", "", "3.38.88.141; x",
-                                "2606:4700:4700::1111"])  # 마지막은 공인 IPv6라서 'IPv4만'이라는 규칙으로만 걸린다
+@pytest.mark.parametrize(
+    "ip",
+    [
+        "10.0.0.5",
+        "192.168.1.10",
+        "172.16.0.1",
+        "127.0.0.1",
+        "169.254.169.254",
+        "0.0.0.0",
+        "100.64.0.1",
+        "2001:db8::1",
+        "::1",
+        "not-an-ip",
+        "",
+        "3.38.88.141; x",
+        "2606:4700:4700::1111",
+    ],
+)  # 마지막은 공인 IPv6라서 'IPv4만'이라는 규칙으로만 걸린다
 def test_only_public_ipv4_addresses_are_accepted(ip):
     with pytest.raises(DnsError) as caught:
         WildcardRecords(ExplodingClient()).ensure("demo", ip)
     assert caught.value.error.code == "invalid_dns_input"
 
 
-@pytest.mark.parametrize("env_id", ["Demo", "1demo", "de.mo", "a", "", "demo.onprem", "*", "demo/x", "x" * 22])
+@pytest.mark.parametrize(
+    "env_id", ["Demo", "1demo", "de.mo", "a", "", "demo.onprem", "*", "demo/x", "x" * 22]
+)
 def test_environment_ids_must_be_a_single_safe_dns_label(env_id):
-    for call in (lambda: WildcardRecords(ExplodingClient()).ensure(env_id, "3.38.88.141"),
-                 lambda: WildcardRecords(ExplodingClient()).remove(env_id)):
+    for call in (
+        lambda: WildcardRecords(ExplodingClient()).ensure(env_id, "3.38.88.141"),
+        lambda: WildcardRecords(ExplodingClient()).remove(env_id),
+    ):
         with pytest.raises(DnsError) as caught:
             call()
         assert caught.value.error.code == "invalid_dns_input"
@@ -227,14 +316,20 @@ def test_a_missing_boto3_is_reported_as_unavailable_not_as_a_retryable_failure(m
     with pytest.raises(DnsError) as caught:
         WildcardRecords().ensure("demo", "3.38.88.141")
     error = caught.value.error
-    assert error.code == "dns_unavailable" and not error.retryable and "anyship-adapters[aws]" in error.hint
+    assert (
+        error.code == "dns_unavailable"
+        and not error.retryable
+        and "anyship-adapters[aws]" in error.hint
+    )
 
 
 # --- 이름 규칙 ------------------------------------------------------------------------------------
 def test_the_record_name_is_one_wildcard_per_environment_under_the_configured_domain():
     assert WildcardRecords(ExplodingClient()).name_for("demo") == "*.demo.onprem.anyship.cloud"
-    assert WildcardRecords(ExplodingClient(), base_domain="example.org").name_for("team7") == \
-        "*.team7.onprem.example.org"
+    assert (
+        WildcardRecords(ExplodingClient(), base_domain="example.org").name_for("team7")
+        == "*.team7.onprem.example.org"
+    )
 
 
 # --- AWS 범위 ---------------------------------------------------------------------------------
@@ -243,16 +338,32 @@ AWS_RECORD = {**RECORD, "Name": AWS_NAME}
 
 
 def test_the_aws_scope_names_its_records_under_aws_and_the_default_stays_onprem():
-    assert WildcardRecords(ExplodingClient(), scope="aws").name_for("demo") == "*.demo.aws.anyship.cloud"
-    assert WildcardRecords(ExplodingClient(), scope="aws", base_domain="example.org").name_for("team7") == "*.team7.aws.example.org"
+    assert (
+        WildcardRecords(ExplodingClient(), scope="aws").name_for("demo")
+        == "*.demo.aws.anyship.cloud"
+    )
+    assert (
+        WildcardRecords(ExplodingClient(), scope="aws", base_domain="example.org").name_for("team7")
+        == "*.team7.aws.example.org"
+    )
     assert WildcardRecords(ExplodingClient()).name_for("demo") == "*.demo.onprem.anyship.cloud"
 
 
 def test_an_aws_record_is_created_with_an_upsert_under_aws():
     client, stub = stubbed()
     expect_lookup(stub, [], name=AWS_NAME)
-    expect_change(stub, batch("UPSERT", {"Name": "*.demo.aws.anyship.cloud", "Type": "A", "TTL": 60,
-                                         "ResourceRecords": [{"Value": "3.38.88.141"}]}))
+    expect_change(
+        stub,
+        batch(
+            "UPSERT",
+            {
+                "Name": "*.demo.aws.anyship.cloud",
+                "Type": "A",
+                "TTL": 60,
+                "ResourceRecords": [{"Value": "3.38.88.141"}],
+            },
+        ),
+    )
     with stub:
         assert WildcardRecords(client, scope="aws").ensure("demo", "3.38.88.141") is True
         stub.assert_no_pending_responses()
@@ -265,8 +376,18 @@ def test_an_aws_record_with_the_right_value_is_left_alone_and_a_new_ip_updates_i
         assert WildcardRecords(client, scope="aws").ensure("demo", "3.38.88.141") is False
     client, stub = stubbed()
     expect_lookup(stub, [AWS_RECORD], name=AWS_NAME)
-    expect_change(stub, batch("UPSERT", {"Name": "*.demo.aws.anyship.cloud", "Type": "A", "TTL": 60,
-                                         "ResourceRecords": [{"Value": "52.78.1.1"}]}))
+    expect_change(
+        stub,
+        batch(
+            "UPSERT",
+            {
+                "Name": "*.demo.aws.anyship.cloud",
+                "Type": "A",
+                "TTL": 60,
+                "ResourceRecords": [{"Value": "52.78.1.1"}],
+            },
+        ),
+    )
     with stub:
         assert WildcardRecords(client, scope="aws").ensure("demo", "52.78.1.1") is True
 
@@ -283,7 +404,9 @@ def test_the_other_scopes_record_for_the_same_environment_is_never_taken_for_our
     expect_lookup(stub, [AWS_RECORD])
     expect_change(stub)
     with stub:
-        assert WildcardRecords(client).ensure("demo", "3.38.88.141") is True  # onprem 범위는 aws 레코드를 무시한다
+        assert (
+            WildcardRecords(client).ensure("demo", "3.38.88.141") is True
+        )  # onprem 범위는 aws 레코드를 무시한다
 
 
 def test_removing_in_the_aws_scope_deletes_only_the_aws_record():
@@ -293,7 +416,9 @@ def test_removing_in_the_aws_scope_deletes_only_the_aws_record():
     with stub:
         assert WildcardRecords(client, scope="aws").remove("demo") is True
     client, stub = stubbed()
-    expect_lookup(stub, [RECORD], name=AWS_NAME)  # 같은 환경의 onprem 레코드만 있으면 지울 것이 없다
+    expect_lookup(
+        stub, [RECORD], name=AWS_NAME
+    )  # 같은 환경의 onprem 레코드만 있으면 지울 것이 없다
     with stub:
         assert WildcardRecords(client, scope="aws").remove("demo") is False
 

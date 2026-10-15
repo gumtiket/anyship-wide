@@ -1,4 +1,5 @@
 """The only Service module that translates on-premise transport details."""
+
 import ipaddress
 import json
 import shlex
@@ -43,28 +44,41 @@ def verified_address(row, result):
 def environment(row, *, require_verified=True, cleanup=False):
     require_kind(row.connection_kind)
     if row.deleted_at is not None or (require_verified and row.status != "VERIFIED"):
-        raise DeployStateError("environment_not_connected", "연결이 확인된 환경만 사용할 수 있습니다.")
+        raise DeployStateError(
+            "environment_not_connected", "연결이 확인된 환경만 사용할 수 있습니다."
+        )
     if not cleanup and row.status == "ISSUED":
         raise DeployStateError("environment_not_signaled", "서버 준비 신고를 먼저 완료하세요.")
     if cleanup and row.host is None:
         # DNS cleanup only uses env_id and never connects to this placeholder.
         return AdapterEnvironment(env_id=row.env_id, host="unregistered.invalid")
     try:
-        return AdapterEnvironment(env_id=row.env_id, host=public_address(row.host),
-                                  ssh_user=row.ssh_user or "deploy", ssh_port=row.ssh_port or 22)
+        return AdapterEnvironment(
+            env_id=row.env_id,
+            host=public_address(row.host),
+            ssh_user=row.ssh_user or "deploy",
+            ssh_port=row.ssh_port or 22,
+        )
     except ValueError:
-        raise DeployStateError("environment_invalid", "저장된 환경의 연결 정보를 확인해 주세요.") from None
+        raise DeployStateError(
+            "environment_invalid", "저장된 환경의 연결 정보를 확인해 주세요."
+        ) from None
 
 
 def guidance(kind):
     require_kind(kind)
-    return {"title": "서버 준비", "message": "Amazon Linux 2023(x86_64) 서버에서 실행하세요. Docker·deploy 계정·Traefik을 설치하고 서버 전체의 비밀번호 및 root SSH 로그인을 끕니다. SSH 22번과 앱 80/443번 포트, 공인 IPv4가 필요합니다. 기존 관리 접속을 유지한 상태에서 실행하세요. 모든 환경은 서비스의 공유 SSH 키를 사용합니다. 인증서는 기본 staging 설정이므로 운영 인증서 전환이 필요합니다."}
+    return {
+        "title": "서버 준비",
+        "message": "Amazon Linux 2023(x86_64) 서버에서 실행하세요. Docker·deploy 계정·Traefik을 설치하고 서버 전체의 비밀번호 및 root SSH 로그인을 끕니다. SSH 22번과 앱 80/443번 포트, 공인 IPv4가 필요합니다. 기존 관리 접속을 유지한 상태에서 실행하세요. 모든 환경은 서비스의 공유 SSH 키를 사용합니다. 인증서는 기본 staging 설정이므로 운영 인증서 전환이 필요합니다.",
+    }
 
 
 def error_message(kind, code, fallback="연결 작업을 완료하지 못했습니다."):
     require_kind(kind)
-    return {"ssh_unreachable": "서버 주소와 SSH 22번 포트·방화벽을 확인하세요.",
-            "ssh_command_failed": "deploy 계정 권한과 서버 준비 상태를 확인하세요."}.get(code, fallback)
+    return {
+        "ssh_unreachable": "서버 주소와 SSH 22번 포트·방화벽을 확인하세요.",
+        "ssh_command_failed": "deploy 계정 권한과 서버 준비 상태를 확인하세요.",
+    }.get(code, fallback)
 
 
 def present_result(kind, data):
@@ -82,8 +96,14 @@ class Transport:
         self.settings = settings
 
     def connect(self, env):
-        runner = SshRunner(SshConnection(public_address(env.host), self.settings.deploy_ssh_key,
-                                         user=env.ssh_user, port=env.ssh_port))
+        runner = SshRunner(
+            SshConnection(
+                public_address(env.host),
+                self.settings.deploy_ssh_key,
+                user=env.ssh_user,
+                port=env.ssh_port,
+            )
+        )
         return runner, ComposeHost(runner)
 
     def script(self, row, token):
@@ -92,18 +112,30 @@ class Transport:
         script = render_setup_script(key, row.email)
         url = shlex.quote(self.settings.app_origin + f"/api/onprem/environments/{row.id}/ready")
         # No token in URL/access logs; the raw token only exists in this response and on the target server.
-        script = script.replace("# 비밀이 없다: 공개 키와 이메일 주소만 들어 있다. 여러 번 실행해도 안전하다.",
-                                "# 일회용 등록 토큰이 포함됩니다. 파일을 공유하거나 로그에 남기지 마세요.")
-        return script + "\nset +x\n" + 'public_ip=$(curl -4fsS --max-time 15 https://checkip.amazonaws.com)\n' + (
-            "printf '{\"token\":\"%s\",\"public_ip\":\"%s\"}' " + shlex.quote(token) + ' "$public_ip" | '
-            f"curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- {url}\n")
+        script = script.replace(
+            "# 비밀이 없다: 공개 키와 이메일 주소만 들어 있다. 여러 번 실행해도 안전하다.",
+            "# 일회용 등록 토큰이 포함됩니다. 파일을 공유하거나 로그에 남기지 마세요.",
+        )
+        return (
+            script
+            + "\nset +x\n"
+            + "public_ip=$(curl -4fsS --max-time 15 https://checkip.amazonaws.com)\n"
+            + (
+                'printf \'{"token":"%s","public_ip":"%s"}\' '
+                + shlex.quote(token)
+                + ' "$public_ip" | '
+                f"curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- {url}\n"
+            )
+        )
 
     def command(self, row, token):
         require_kind(row.connection_kind)
         url = shlex.quote(self.settings.app_origin + f"/api/onprem/environments/{row.id}/setup")
         payload = shlex.quote(json.dumps({"token": token}))
         # Download completely before executing; temp file has private permissions and is always removed.
-        body = ('set -e; umask 077; f=$(mktemp); trap \'rm -f "$f"\' EXIT; '
-                f"printf %s {payload} | curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- {url} "
-                '-o "$f"; sudo bash "$f"')
+        body = (
+            "set -e; umask 077; f=$(mktemp); trap 'rm -f \"$f\"' EXIT; "
+            f"printf %s {payload} | curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- {url} "
+            '-o "$f"; sudo bash "$f"'
+        )
         return "bash -c " + shlex.quote(body)

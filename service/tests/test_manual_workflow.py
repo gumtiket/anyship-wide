@@ -4,16 +4,15 @@ from unittest.mock import patch
 import pytest
 import requests
 
+from github import GitCommandError, Workspace
 from github.changes import commit_changes, stage_changes
 from github.repository import run_git
-from github import GitCommandError, Workspace
 from tests.github_manual import (
     PullRequestCreationError,
     Settings,
     prepare_workspace,
     publish_workspace,
 )
-
 
 URL = "https://github.com/owner/repo"
 SETTINGS = Settings("test-token", "owner/repo")
@@ -37,7 +36,10 @@ def remote_operations():
     with (
         patch("github.pull_request.get_default_branch", return_value="main"),
         patch("github.changes.push_branch") as push,
-        patch("github.pull_request.create_pull_request", return_value={"number": 1, "url": URL + "/pull/1"}) as pr,
+        patch(
+            "github.pull_request.create_pull_request",
+            return_value={"number": 1, "url": URL + "/pull/1"},
+        ) as pr,
     ):
         yield push, pr
 
@@ -99,7 +101,10 @@ def test_optional_pr(workspace, remote_operations):
     result = publish_workspace(URL, workspace, open_pr=True, settings=SETTINGS)
     assert result["status"] == "created"
     remote_operations[1].assert_called_once_with(
-        "owner/repo", "work", "main", "test-token",
+        "owner/repo",
+        "work",
+        "main",
+        "test-token",
         title="Automated Code Changes",
         body="코드 수정 도구가 생성한 자동 코드 변경 사항입니다.",
         draft=True,
@@ -114,7 +119,9 @@ def test_pr_failure_keeps_workspace(workspace, remote_operations):
     assert workspace.exists()
 
 
-@pytest.mark.parametrize("invalid_state", ["base", "detached", "remote", "push_remote", "subdirectory"])
+@pytest.mark.parametrize(
+    "invalid_state", ["base", "detached", "remote", "push_remote", "subdirectory"]
+)
 def test_publish_rejects_wrong_workspace(workspace, remote_operations, invalid_state):
     if invalid_state == "base":
         run_git(["checkout", "main"], cwd=workspace)
@@ -123,7 +130,10 @@ def test_publish_rejects_wrong_workspace(workspace, remote_operations, invalid_s
     elif invalid_state == "remote":
         run_git(["remote", "set-url", "origin", "https://github.com/other/repo"], cwd=workspace)
     elif invalid_state == "push_remote":
-        run_git(["remote", "set-url", "--push", "origin", "https://github.com/other/repo"], cwd=workspace)
+        run_git(
+            ["remote", "set-url", "--push", "origin", "https://github.com/other/repo"],
+            cwd=workspace,
+        )
     else:
         workspace = workspace / "subdir"
         workspace.mkdir()

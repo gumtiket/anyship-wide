@@ -1,4 +1,5 @@
 """Copy a stopped service's SQLite snapshot into an empty, migrated PostgreSQL DB."""
+
 import hashlib
 import json
 
@@ -22,11 +23,16 @@ def copy_sqlite_snapshot(source, target):
         if set(inspector.get_table_names()) != expected:
             raise ValueError("Database tables do not match the current migrations.")
         for table in tables:
-            if {column["name"] for column in inspector.get_columns(table.name)} != set(table.columns.keys()):
+            if {column["name"] for column in inspector.get_columns(table.name)} != set(
+                table.columns.keys()
+            ):
                 raise ValueError(f"Column mismatch in {table.name}.")
     counts = {}
     with source.connect() as reader, target.begin() as writer:
-        if reader.execute(text("SELECT version_num FROM alembic_version")).scalar_one() != writer.execute(text("SELECT version_num FROM alembic_version")).scalar_one():
+        if (
+            reader.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+            != writer.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        ):
             raise ValueError("Source and target migration versions must match.")
         # Block concurrent writers for the entire copy and verification transaction.
         names = ", ".join(target.dialect.identifier_preparer.quote(table.name) for table in tables)

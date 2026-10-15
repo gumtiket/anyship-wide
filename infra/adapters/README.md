@@ -198,15 +198,21 @@ from pathlib import Path
 from anyship_adapters import AwsEnvironment
 from anyship_adapters.terraform_runner import TerraformError, TerraformRunner
 
-runner = TerraformRunner(Path("infra/user-account"), plugin_cache_dir=Path("~/.terraform.d/plugin-cache").expanduser())
-env = AwsEnvironment(..., state_bucket="anyship-tfstate-<계정>-<리전>-<8자>")  # 온보딩 스택 출력 StateBucketName
+runner = TerraformRunner(
+    Path("infra/user-account"), plugin_cache_dir=Path("~/.terraform.d/plugin-cache").expanduser()
+)
+env = AwsEnvironment(
+    ..., state_bucket="anyship-tfstate-<계정>-<리전>-<8자>"
+)  # 온보딩 스택 출력 StateBucketName
 try:
-    changed = runner.plan(env, variables, log)   # 변경이 있으면 True. 아무것도 바꾸지 않는다
-    runner.apply(env, variables, log)            # terraform apply -auto-approve
-    env = runner.read_foundation(env, log)       # state의 출력으로 host, db_address, db_port, db_secret_arn을 채운 새 환경
+    changed = runner.plan(env, variables, log)  # 변경이 있으면 True. 아무것도 바꾸지 않는다
+    runner.apply(env, variables, log)  # terraform apply -auto-approve
+    env = runner.read_foundation(
+        env, log
+    )  # state의 출력으로 host, db_address, db_port, db_secret_arn을 채운 새 환경
 except TerraformError as exc:
     exc.error  # AdapterError(code, message, hint, retryable)
-    exc.tail   # 비밀을 가린 마지막 출력 15줄. 결과의 details에 넣는 용도
+    exc.tail  # 비밀을 가린 마지막 출력 15줄. 결과의 details에 넣는 용도
 ```
 
 `variables`는 Terraform 변수 이름에서 값으로의 딕셔너리이고, **비밀이 아닌 값만** 넣습니다(임시 JSON 파일로 전달).
@@ -271,11 +277,15 @@ from anyship_adapters.image_builder import BuildError, ImageBuilder
 
 builder = ImageBuilder()
 try:
-    built = builder.build(Path("/path/to/merged/source"), "todo", "a1a1a1a", log)  # BuiltImage(image="todo:a1a1a1a", image_id="sha256:...")
-    builder.prune("todo", keep=5)  # 앱마다 최근 5개만 남기고 오래된 이미지를 지운다(서비스 서버 디스크 보호)
+    built = builder.build(
+        Path("/path/to/merged/source"), "todo", "a1a1a1a", log
+    )  # BuiltImage(image="todo:a1a1a1a", image_id="sha256:...")
+    builder.prune(
+        "todo", keep=5
+    )  # 앱마다 최근 5개만 남기고 오래된 이미지를 지운다(서비스 서버 디스크 보호)
 except BuildError as exc:
     exc.error  # AdapterError(code, message, hint, retryable)
-    exc.tail   # 비밀을 가린 마지막 출력 15줄
+    exc.tail  # 비밀을 가린 마지막 출력 15줄
 ```
 
 **지키는 것**
@@ -349,13 +359,21 @@ from anyship_adapters.terraform_runner import TerraformRunner
 deployer = Deployer(
     {"aws-always-on": aws_adapter, "onprem": onprem_adapter},
     ImageBuilder(),
-    runner=TerraformRunner(Path("infra/user-account")),   # runner와 foundation은 함께 줘야 한다(없으면 기반 단계를 건너뜀)
-    foundation=FoundationSettings(service_server_ip="...", ssh_public_key="ssh-ed25519 ...", acme_email="..."),
+    runner=TerraformRunner(
+        Path("infra/user-account")
+    ),  # runner와 foundation은 함께 줘야 한다(없으면 기반 단계를 건너뜀)
+    foundation=FoundationSettings(
+        service_server_ip="...", ssh_public_key="ssh-ed25519 ...", acme_email="..."
+    ),
 )
-result = deployer.deploy(env, spec, Path("/path/to/merged/source"), commit_sha, secrets, log, set_name="aws-always-on")
+result = deployer.deploy(
+    env, spec, Path("/path/to/merged/source"), commit_sha, secrets, log, set_name="aws-always-on"
+)
 result.ok, result.url, result.image_tag
-result.details["stage"]             # 실패했을 때: spec / build / foundation / check / deploy
-result.details["foundation"]        # 성공했을 때(aws): host, db_address, db_port, db_secret_arn. 서비스가 환경 레코드에 저장할 값
+result.details["stage"]  # 실패했을 때: spec / build / foundation / check / deploy
+result.details[
+    "foundation"
+]  # 성공했을 때(aws): host, db_address, db_port, db_secret_arn. 서비스가 환경 레코드에 저장할 값
 result.details["foundation_created"]  # 이번 호출이 기반을 새로 만들었으면 True
 ```
 
@@ -405,9 +423,13 @@ EXTERNAL_ID=... python -u infra/adapters/scripts/smoke_deployer.py --role-arn <�
 `Deployer`를 만드는 모양:
 
 ```python
-dns = WildcardRecords(scope="onprem", base_domain="anyship.cloud")   # 서비스 서버 역할의 Route 53(IAM 적용 완료)
-adapter = OnpremAdapter(Path("/home/ec2-user/.ssh/onprem_deploy"), base_domain="anyship.cloud", dns=dns)
-deployer = Deployer({"onprem": adapter}, ImageBuilder())             # runner, foundation 없음 → 기반 단계 없음
+dns = WildcardRecords(
+    scope="onprem", base_domain="anyship.cloud"
+)  # 서비스 서버 역할의 Route 53(IAM 적용 완료)
+adapter = OnpremAdapter(
+    Path("/home/ec2-user/.ssh/onprem_deploy"), base_domain="anyship.cloud", dns=dns
+)
+deployer = Deployer({"onprem": adapter}, ImageBuilder())  # runner, foundation 없음 → 기반 단계 없음
 ```
 
 AWS 세트와 함께 쓰려면 `{"aws-always-on": aws_adapter, "onprem": adapter}`로 한 `Deployer`에 같이 넣고 `set_name`으로 고른다. 환경 종류와 세트가 맞지 않으면 어댑터를 부르기 전에 `set_not_supported`로 거절된다.
@@ -457,8 +479,9 @@ python scripts/smoke_onprem.py --host <서버 IP> --env-id dnstest --dns --stagi
 디스크나 메모리에 덤프를 모으지 않는다. 대신 서비스 서버의 네트워크를 지나가므로 작은 DB용이다(기본 한도 1 GiB, `max_bytes`).
 
 ```python
-result = deployer.transfer_data(onprem_env, aws_env, "todo", log,
-                                source_set="onprem", target_set="aws-always-on")
+result = deployer.transfer_data(
+    onprem_env, aws_env, "todo", log, source_set="onprem", target_set="aws-always-on"
+)
 # result.ok, result.details == {"bytes": ..., "tables": ..., "rows": ..., "source_stopped": True}
 ```
 
@@ -512,11 +535,11 @@ mock이 내는 코드이고, 실제 어댑터가 생기면 더 늘어납니다
 실제 환경 없이 서비스를 개발하고 시험하는 용도입니다. 
 
 ```python
-MockAdapter()                    # 모든 것이 성공
-MockAdapter("check_fails")       # check 실패
-MockAdapter("deploy_fails")      # 4단계(앱 시작)에서 실패
-MockAdapter("unhealthy")         # 5단계(헬스체크)에서 실패
-MockAdapter(delay=1.0)           # 단계마다 1초 대기(진행 화면 확인용)
+MockAdapter()  # 모든 것이 성공
+MockAdapter("check_fails")  # check 실패
+MockAdapter("deploy_fails")  # 4단계(앱 시작)에서 실패
+MockAdapter("unhealthy")  # 5단계(헬스체크)에서 실패
+MockAdapter(delay=1.0)  # 단계마다 1초 대기(진행 화면 확인용)
 ```
 
 - 앱 정보는 **메모리에만** 있어서 프로세스를 다시 시작하면 사라집니다.

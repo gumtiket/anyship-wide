@@ -14,6 +14,7 @@
 --env-id는 레코드에 env_id가 없을 때만 쓴다(먼저 만든 기반이 `test`일 때). 주지 않으면 레코드 ID에서 정한다.
 이미 만든 기반의 env_id와 다르면 기반을 못 찾으므로(state의 키가 env_id다), 켜 둔 테스트 계정은 `--env-id test`로 실행한다.
 """
+
 import argparse
 import os
 import sys
@@ -26,11 +27,16 @@ from dotenv import load_dotenv  # noqa: E402
 
 from anyship_adapters.aws_access import AwsAccess, AwsAccessError  # noqa: E402
 from anyship_adapters.terraform_runner import TerraformError, TerraformRunner  # noqa: E402
-
 from app.config import DEFAULT_DATABASE_URL  # noqa: E402
 from app.db import AwsEnvironment, database  # noqa: E402
-from app.deploy_state import (FOUNDATION_FIELDS, DeployStateError, adapter_environment, assign_env_id,  # noqa: E402
-                              ensure_state_bucket, save_foundation)
+from app.deploy_state import (  # noqa: E402
+    FOUNDATION_FIELDS,
+    DeployStateError,
+    adapter_environment,
+    assign_env_id,
+    ensure_state_bucket,
+    save_foundation,
+)
 
 results: list[tuple[str, bool]] = []
 collected: list[str] = []
@@ -56,7 +62,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--environment-id", required=True)
     parser.add_argument("--env-id", help="레코드에 env_id가 없을 때 쓸 값(예: test)")
-    parser.add_argument("--plugin-cache", default=str(Path.home() / ".terraform.d" / "plugin-cache"))
+    parser.add_argument(
+        "--plugin-cache", default=str(Path.home() / ".terraform.d" / "plugin-cache")
+    )
     args = parser.parse_args()
 
     load_dotenv(ROOT / "service" / ".env.github.local")
@@ -90,7 +98,10 @@ def main() -> int:
             print("3) 진짜 AWS: describe_stacks로 StateBucketName 읽기")
             bucket = AwsAccess().read_state_bucket(env, row.stack_name)
             print(f"      {bucket}")
-            expect("버킷 이름이 규칙에 맞고 이 계정의 것이다", bucket.split("-")[2] == row.role_arn.split(":")[4])
+            expect(
+                "버킷 이름이 규칙에 맞고 이 계정의 것이다",
+                bucket.split("-")[2] == row.role_arn.split(":")[4],
+            )
             if row.state_bucket:
                 expect("저장된 state_bucket과 같다", row.state_bucket == bucket)
 
@@ -98,27 +109,45 @@ def main() -> int:
             counting = CountingAccess()
             had = bool(row.state_bucket)
             expect("state_bucket이 채워진다", ensure_state_bucket(session, row, counting) == bucket)
-            expect("비어 있었으면 AWS를 한 번 부르고, 있었으면 부르지 않는다", counting.reads == (0 if had else 1))
+            expect(
+                "비어 있었으면 AWS를 한 번 부르고, 있었으면 부르지 않는다",
+                counting.reads == (0 if had else 1),
+            )
         with sessions() as session:
-            expect("DB에 저장되어 있다", session.get(AwsEnvironment, args.environment_id).state_bucket == bucket)
+            expect(
+                "DB에 저장되어 있다",
+                session.get(AwsEnvironment, args.environment_id).state_bucket == bucket,
+            )
 
             print("5) read_foundation의 결과를 저장하기")
             row = session.get(AwsEnvironment, args.environment_id)
-            runner = TerraformRunner(ROOT / "infra" / "user-account", plugin_cache_dir=Path(args.plugin_cache))
-            found = runner.read_foundation(adapter_environment(row), lambda event: collected.append(event.message))
+            runner = TerraformRunner(
+                ROOT / "infra" / "user-account", plugin_cache_dir=Path(args.plugin_cache)
+            )
+            found = runner.read_foundation(
+                adapter_environment(row), lambda event: collected.append(event.message)
+            )
             fields = {name: getattr(found, name) for name in FOUNDATION_FIELDS}
             expect("기반 값 4개가 모두 있다", all(item is not None for item in fields.values()))
             save_foundation(session, row, fields)
         with sessions() as session:
             saved = session.get(AwsEnvironment, args.environment_id)
-            expect("다시 읽은 값이 저장한 값과 같다", {name: getattr(saved, name) for name in FOUNDATION_FIELDS} == fields)
-            expect("저장된 값으로 만든 어댑터 환경에 호스트가 들어 있다", adapter_environment(saved).host == fields["host"])
+            expect(
+                "다시 읽은 값이 저장한 값과 같다",
+                {name: getattr(saved, name) for name in FOUNDATION_FIELDS} == fields,
+            )
+            expect(
+                "저장된 값으로 만든 어댑터 환경에 호스트가 들어 있다",
+                adapter_environment(saved).host == fields["host"],
+            )
 
         print("6) 비밀")
         expect("로그에 External ID가 없다", not any(external_id in line for line in collected))
     except (DeployStateError, TerraformError, AwsAccessError) as exc:
         error = getattr(exc, "error", exc)
-        print(f"   -> 실패 {getattr(error, 'code', type(exc).__name__)}: {getattr(error, 'message', exc)}")
+        print(
+            f"   -> 실패 {getattr(error, 'code', type(exc).__name__)}: {getattr(error, 'message', exc)}"
+        )
         expect("시험이 중간에 멈추지 않았다", False)
     finally:
         engine.dispose()

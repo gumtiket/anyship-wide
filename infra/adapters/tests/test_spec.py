@@ -1,8 +1,7 @@
 import pytest
+from specs import GENERATED, HAND_WRITTEN, make
 
 from anyship_adapters.spec import SpecError, parse_spec
-
-from specs import GENERATED, HAND_WRITTEN, make
 
 
 def rejected(spec):
@@ -32,7 +31,10 @@ def test_a_spec_without_a_database_or_release_is_fine():
 
 
 def test_unused_fields_are_ignored():
-    assert parse_spec(make(profile="prod", source={"repo": "x"}, workload={"anything": 1})).app == "todo"
+    assert (
+        parse_spec(make(profile="prod", source={"repo": "x"}, workload={"anything": 1})).app
+        == "todo"
+    )
 
 
 # --- 앱 이름, 포트, 경로 ----------------------------------------------------------------
@@ -68,9 +70,22 @@ def test_error_messages_name_the_field_but_never_echo_values():
 
 
 # --- 환경변수 -------------------------------------------------------------------------------
-@pytest.mark.parametrize("name", ["LD_PRELOAD", "AWS_ACCESS_KEY_ID", "AWS_SESSION_TOKEN", "DOCKER_HOST",
-                                  "PATH", "HOME", "DATABASE_URL", "STORAGE_URL", "POSTGRES_PASSWORD",
-                                  "COMPOSE_FILE", "TRAEFIK_API"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "LD_PRELOAD",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SESSION_TOKEN",
+        "DOCKER_HOST",
+        "PATH",
+        "HOME",
+        "DATABASE_URL",
+        "STORAGE_URL",
+        "POSTGRES_PASSWORD",
+        "COMPOSE_FILE",
+        "TRAEFIK_API",
+    ],
+)
 def test_reserved_env_names_are_rejected(name):
     error = rejected(make(env=[{"name": name, "value": "x"}]))
     assert error.code == "invalid_env_name" and name in error.message
@@ -82,7 +97,10 @@ def test_malformed_env_names_are_rejected(name):
 
 
 def test_duplicate_env_names_are_rejected():
-    assert rejected(make(env=[{"name": "A", "value": "1"}, {"name": "A", "value": "2"}])).code == "invalid_env_name"
+    assert (
+        rejected(make(env=[{"name": "A", "value": "1"}, {"name": "A", "value": "2"}])).code
+        == "invalid_env_name"
+    )
 
 
 @pytest.mark.parametrize("value", ["a\nb", "a\rb", "a\0b", "it's", "x" * 1025])
@@ -95,11 +113,19 @@ def test_port_env_with_a_different_value_is_rejected():
 
 
 def test_secret_rules():
-    assert rejected(make(env=[{"name": "A", "secret": True, "value": "x"}])).code == "invalid_secret_config"
-    assert rejected(make(env=[{"name": "A", "secret": False, "generate": True}])).code == "invalid_secret_config"
+    assert (
+        rejected(make(env=[{"name": "A", "secret": True, "value": "x"}])).code
+        == "invalid_secret_config"
+    )
+    assert (
+        rejected(make(env=[{"name": "A", "secret": False, "generate": True}])).code
+        == "invalid_secret_config"
+    )
     assert rejected(make(env=[{"name": "A", "secret": False}])).code == "invalid_secret_config"
     # 사용자가 입력할 비밀(secret만 true)과 생성할 비밀(secret과 generate)은 통과한다.
-    assert parse_spec(make(env=[{"name": "A", "secret": True}, {"name": "B", "secret": True, "generate": True}]))
+    assert parse_spec(
+        make(env=[{"name": "A", "secret": True}, {"name": "B", "secret": True, "generate": True}])
+    )
 
 
 # --- 외부 자원과 마이그레이션 ----------------------------------------------------------------
@@ -109,7 +135,10 @@ def test_unknown_backing_services_are_rejected():
 
 
 def test_postgres_must_bind_to_database_url_and_appear_once():
-    assert rejected(make(backing_services=[{"type": "postgres", "bind_as": "OTHER"}])).code == "invalid_spec"
+    assert (
+        rejected(make(backing_services=[{"type": "postgres", "bind_as": "OTHER"}])).code
+        == "invalid_spec"
+    )
     twice = [{"type": "postgres", "bind_as": "DATABASE_URL"}] * 2
     assert rejected(make(backing_services=twice)).code == "invalid_spec"
 

@@ -28,3 +28,6 @@ github = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+extend = "../ruff.toml"

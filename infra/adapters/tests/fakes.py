@@ -1,4 +1,5 @@
 """여러 테스트가 같이 쓰는 가짜 서버와 가짜 프로세스. 실제 SSH나 Docker는 쓰지 않는다."""
+
 import io
 import shlex
 import subprocess
@@ -23,12 +24,13 @@ class FakeServer:
         self.commands.append(remote)
         self.kwargs.append(kwargs)
         for prefix, (code, out, err) in self.responses.items():
-            if tuple(remote[:len(prefix)]) == prefix:
+            if tuple(remote[: len(prefix)]) == prefix:
                 return subprocess.CompletedProcess(cmd, code, stdout=out, stderr=err)
         if remote[0] == "cat":
             found = remote[1] in self.files
-            return subprocess.CompletedProcess(cmd, 0 if found else 1,
-                                               stdout=self.files.get(remote[1], b""), stderr=b"")
+            return subprocess.CompletedProcess(
+                cmd, 0 if found else 1, stdout=self.files.get(remote[1], b""), stderr=b""
+            )
         if remote[:2] == ["sh", "-c"]:  # SshRunner.put이 만든 파일 쓰기 명령
             path = remote[4]
             if self._fail_suffix and path.endswith(self._fail_suffix):
@@ -80,7 +82,10 @@ class LifecycleServer(FakeServer):
     """
 
     def __init__(self, responses=None, **kwargs):
-        defaults = {("docker", "ps"): (0, b"traefik-traefik-1\n", b""), ("curl",): (0, b"3.38.88.141\n", b"")}
+        defaults = {
+            ("docker", "ps"): (0, b"traefik-traefik-1\n", b""),
+            ("curl",): (0, b"3.38.88.141\n", b""),
+        }
         super().__init__(responses={**defaults, **(responses or {})}, **kwargs)
         self.images: set[str] = set()
         self.running: set[str] = set()
@@ -98,7 +103,7 @@ class LifecycleServer(FakeServer):
 
     def __call__(self, cmd, **kwargs):
         remote = shlex.split(cmd[-1])
-        if any(tuple(remote[:len(prefix)]) == prefix for prefix in self.responses):
+        if any(tuple(remote[: len(prefix)]) == prefix for prefix in self.responses):
             return super().__call__(cmd, **kwargs)
         compose = remote[:2] == ["docker", "compose"]
         handled = True
@@ -120,7 +125,9 @@ class LifecycleServer(FakeServer):
             answer = self._answer(cmd)
         elif remote[:3] == ["rm", "-r", "-f"]:
             target = remote[3]
-            self.files = {path: data for path, data in self.files.items() if not path.startswith(target + "/")}
+            self.files = {
+                path: data for path, data in self.files.items() if not path.startswith(target + "/")
+            }
             self.removed.append(target)
             answer = self._answer(cmd)
         else:

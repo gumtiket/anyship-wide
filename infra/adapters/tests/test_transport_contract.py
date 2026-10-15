@@ -4,6 +4,7 @@ The subprocess replacement executes commands on a private local POSIX sandbox;
 it never starts SSH or contacts a server. Add an agent fixture to the parameter
 list when that implementation exists, retaining these behavioral assertions.
 """
+
 import io
 import os
 import shlex
@@ -22,6 +23,7 @@ def transport(request, tmp_path):
     shell = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else shutil.which("bash")
     if not shell or not Path(shell).is_file():
         pytest.skip("A POSIX shell is needed for the local filesystem contract sandbox.")
+
     def remote(path):
         value = path.as_posix()
         return "/" + value[0].lower() + value[2:] if os.name == "nt" else value
@@ -34,11 +36,20 @@ def transport(request, tmp_path):
         # In the fake server, chmod failing simulates disk/permission failure before rename.
         remote_command = shlex.split(command[-1])
         if state.fail_permissions and remote_command[:2] == ["sh", "-c"]:
-            return subprocess.run([shell, "-c", "chmod() { return 1; }; " + remote_command[2], *remote_command[3:]], **kwargs)
+            return subprocess.run(
+                [shell, "-c", "chmod() { return 1; }; " + remote_command[2], *remote_command[3:]],
+                **kwargs,
+            )
         return subprocess.run([shell, "-c", command[-1]], **kwargs)
 
     runner = SshRunner(SshConnection("example.com", Path("unused-key")), runner=process)
-    return SimpleNamespace(runner=runner, state=state, path=tmp_path / "secret", remote=remote(tmp_path / "secret"), limit=MAX_OUTPUT)
+    return SimpleNamespace(
+        runner=runner,
+        state=state,
+        path=tmp_path / "secret",
+        remote=remote(tmp_path / "secret"),
+        limit=MAX_OUTPUT,
+    )
 
 
 def test_argument_boundaries_and_input_stream(transport):

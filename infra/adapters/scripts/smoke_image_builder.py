@@ -13,6 +13,7 @@
 --keep-image를 주면 시험용 이미지(smoke-todo:*, smoke-imds-probe:*)를 지우지 않는다. 베이스 이미지(python:3.12-slim,
 public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0)는 미리 받아 두는 것이 좋다(없으면 첫 빌드에 내려받아 오래 걸린다).
 """
+
 import argparse
 import re
 import shutil
@@ -30,7 +31,7 @@ from anyship_adapters.image_builder import BuildError, ImageBuilder
 APP, SHA = "smoke-todo", "abcdef1"
 PROBE_APP = "smoke-imds-probe"
 ROOT = Path(__file__).resolve().parents[3]
-PROBE = textwrap.dedent('''\
+PROBE = textwrap.dedent("""\
     import sys
     import urllib.error
     import urllib.request as u
@@ -52,7 +53,7 @@ PROBE = textwrap.dedent('''\
     print("probe: metadata_reachable =", metadata)
     print("probe: service_reachable =", service)
     sys.exit(1 if metadata else 0)  # 메타데이터에 닿으면 빌드를 실패시킨다
-    ''')
+    """)
 
 
 def docker(*args, check=False) -> subprocess.CompletedProcess:
@@ -65,11 +66,15 @@ def assemble(sample: Path, out: Path, target: Path, *, plant: bool = True) -> No
     plant=True(기본)는 빌더의 제외 로직만 시험하려고 B의 .dockerignore를 지우고 비밀로 보이는 파일을 일부러 심는다.
     plant=False는 B가 만든 그대로(.dockerignore 포함, 심은 파일 없음)의 변환본이다."""
     shutil.copytree(sample, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".venv"))
-    subprocess.run(["git", "apply", "--whitespace=nowarn", str(out / "changes.diff")], cwd=target, check=True)
+    subprocess.run(
+        ["git", "apply", "--whitespace=nowarn", str(out / "changes.diff")], cwd=target, check=True
+    )
     shutil.copy(out / "Dockerfile", target / "Dockerfile")
     if not plant:
         return
-    (target / ".dockerignore").unlink(missing_ok=True)  # B의 제외 규칙에 기대지 않고 빌더의 제외만 시험한다
+    (target / ".dockerignore").unlink(
+        missing_ok=True
+    )  # B의 제외 규칙에 기대지 않고 빌더의 제외만 시험한다
     (target / ".git").mkdir()
     (target / ".git" / "config").write_text("[remote] url = https://planted.example/secret\n")
     for name in (".env", ".env.production"):
@@ -79,7 +84,12 @@ def assemble(sample: Path, out: Path, target: Path, *, plant: bool = True) -> No
 def make_log(verbose: bool, lines: list):
     def log(event):
         lines.append(event.message)
-        if verbose or event.step == 1 or "ERROR" in event.message or event.message.startswith("이미지"):
+        if (
+            verbose
+            or event.step == 1
+            or "ERROR" in event.message
+            or event.message.startswith("이미지")
+        ):
             print(f"    {event.message[:140]}")
 
     return log
@@ -89,7 +99,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample", default=str(ROOT / "AI" / "samples" / "todo"))
     parser.add_argument("--out", default=str(ROOT / "AI" / "ai" / "demo-cache" / "todo" / "out"))
-    parser.add_argument("--service-url", default="http://172.17.0.1:8000/api/health", help="빌드 컨테이너가 닿는지 보고할 서비스 주소")
+    parser.add_argument(
+        "--service-url",
+        default="http://172.17.0.1:8000/api/health",
+        help="빌드 컨테이너가 닿는지 보고할 서비스 주소",
+    )
     parser.add_argument("--keep-image", action="store_true")
     parser.add_argument("--verbose", action="store_true", help="빌드 출력 줄을 모두 보여 준다")
     args = parser.parse_args()
@@ -99,32 +113,62 @@ def main() -> int:
     try:
         source = work / "source"
         assemble(Path(args.sample), Path(args.out), source)
-        print(f"변환본을 조립했습니다: {sum(1 for p in source.rglob('*') if p.is_file())}개 파일(비밀로 보이는 파일 3개를 심어 둠)")
+        print(
+            f"변환본을 조립했습니다: {sum(1 for p in source.rglob('*') if p.is_file())}개 파일(비밀로 보이는 파일 3개를 심어 둠)"
+        )
 
         print("1) 빌드(콜드: 캐시를 쓸 수 있으면 쓴다)")
         built = timed(lambda: builder.build(source, APP, SHA, log))
-        expect("이미지 이름이 <앱>:<SHA>이다", built.image == image and built.image_id.startswith("sha256:"))
+        expect(
+            "이미지 이름이 <앱>:<SHA>이다",
+            built.image == image and built.image_id.startswith("sha256:"),
+        )
 
         print("2) 같은 소스를 다시 빌드(캐시)")
         again = timed(lambda: builder.build(source, APP, SHA, lambda e: None))
-        expect("같은 소스를 다시 빌드해도 같은 이미지 ID다(캐시 재사용)", again.image_id == built.image_id)
+        expect(
+            "같은 소스를 다시 빌드해도 같은 이미지 ID다(캐시 재사용)",
+            again.image_id == built.image_id,
+        )
 
         print("3) 이미지 검사")
         info = docker("image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image)
         expect("이미지가 linux/amd64다", info.stdout.strip() == "linux/amd64")
-        found = docker("run", "--rm", "--entrypoint", "sh", image, "-c",
-                       "ls -A /app; test ! -e /app/.git && test ! -e /app/.env && test ! -e /app/.env.production")
-        expect("소스에 심은 .git과 .env*가 이미지 안에 없다(.dockerignore 없이도)", found.returncode == 0)
-        expect("앱 코드는 들어 있다(/app/app/main.py)", docker("run", "--rm", "--entrypoint", "test", image, "-f", "/app/app/main.py").returncode == 0)
+        found = docker(
+            "run",
+            "--rm",
+            "--entrypoint",
+            "sh",
+            image,
+            "-c",
+            "ls -A /app; test ! -e /app/.git && test ! -e /app/.env && test ! -e /app/.env.production",
+        )
+        expect(
+            "소스에 심은 .git과 .env*가 이미지 안에 없다(.dockerignore 없이도)",
+            found.returncode == 0,
+        )
+        expect(
+            "앱 코드는 들어 있다(/app/app/main.py)",
+            docker(
+                "run", "--rm", "--entrypoint", "test", image, "-f", "/app/app/main.py"
+            ).returncode
+            == 0,
+        )
 
         print("4) 빌드 중 RUN 단계가 인스턴스 메타데이터에 닿는지")
         probe = work / "probe"
         probe.mkdir()
         (probe / "probe.py").write_text(PROBE % args.service_url)
-        (probe / "Dockerfile").write_text("FROM python:3.12-slim\nCOPY probe.py /probe.py\nRUN python /probe.py\n")
+        (probe / "Dockerfile").write_text(
+            "FROM python:3.12-slim\nCOPY probe.py /probe.py\nRUN python /probe.py\n"
+        )
         probe_lines: list = []
         try:
-            timed(lambda: builder.build(probe, PROBE_APP, SHA, lambda e: probe_lines.append(e.message)))
+            timed(
+                lambda: builder.build(
+                    probe, PROBE_APP, SHA, lambda e: probe_lines.append(e.message)
+                )
+            )
             blocked = True
         except BuildError as exc:
             blocked = False
@@ -132,7 +176,9 @@ def main() -> int:
         expect("빌드 중에는 인스턴스 메타데이터에 닿지 못한다(닿으면 빌드가 실패한다)", blocked)
         reported = " ".join(probe_lines)
         service = re.search(r"service_reachable = (True|False)", reported)
-        print(f"   참고: 빌드 컨테이너에서 서비스 포트에 닿는가 = {service.group(1) if service else '알 수 없음'}")
+        print(
+            f"   참고: 빌드 컨테이너에서 서비스 포트에 닿는가 = {service.group(1) if service else '알 수 없음'}"
+        )
 
         print("5) prune (진짜 docker image ls 출력으로)")
         for tag in ("1111111", "2222222"):
@@ -144,7 +190,13 @@ def main() -> int:
         shutil.rmtree(work, ignore_errors=True)
         if not args.keep_image:
             for name in (APP, PROBE_APP):
-                tags = [t for t in docker("image", "ls", name, "--format", "{{.Repository}}:{{.Tag}}").stdout.split() if t]
+                tags = [
+                    t
+                    for t in docker(
+                        "image", "ls", name, "--format", "{{.Repository}}:{{.Tag}}"
+                    ).stdout.split()
+                    if t
+                ]
                 if tags:
                     docker("image", "rm", *tags)
 

@@ -19,7 +19,6 @@ from github import (
 from github.changes import commit_changes, stage_changes
 from github.repository import run_git
 
-
 URL = "https://github.com/owner/repo"
 
 
@@ -100,8 +99,11 @@ def test_push_and_custom_pull_request(repo):
         result = repo.create_pull_request("Custom title", body="Details", base="main", draft=False)
     assert result == PullRequest(4, URL + "/pull/4")
     assert post.call_args.kwargs["json"] == {
-        "title": "Custom title", "body": "Details", "head": "work/custom",
-        "base": "main", "draft": False,
+        "title": "Custom title",
+        "body": "Details",
+        "head": "work/custom",
+        "base": "main",
+        "draft": False,
     }
 
 
@@ -115,7 +117,15 @@ def test_default_branch_push_is_rejected(repo):
     push.assert_not_called()
 
 
-@pytest.mark.parametrize("status,error_type", [(401, AuthenticationError), (403, AuthenticationError), (404, GitHubAPIError), (500, GitHubAPIError)])
+@pytest.mark.parametrize(
+    "status,error_type",
+    [
+        (401, AuthenticationError),
+        (403, AuthenticationError),
+        (404, GitHubAPIError),
+        (500, GitHubAPIError),
+    ],
+)
 def test_http_errors_are_typed_and_do_not_print_token(tmp_path, status, error_type):
     client = GitHubRepository(URL, tmp_path, "private-token")
     response = requests.Response()
@@ -128,7 +138,10 @@ def test_http_errors_are_typed_and_do_not_print_token(tmp_path, status, error_ty
 
 
 def test_git_failure_is_typed_and_preserves_files(repo):
-    with patch("github.repository.subprocess.run", side_effect=subprocess.CalledProcessError(1, "git", stderr="private-token")):
+    with patch(
+        "github.repository.subprocess.run",
+        side_effect=subprocess.CalledProcessError(1, "git", stderr="private-token"),
+    ):
         with pytest.raises(GitCommandError) as caught:
             repo.inspect()
     assert "private-token" not in "".join(traceback.format_exception(caught.value))

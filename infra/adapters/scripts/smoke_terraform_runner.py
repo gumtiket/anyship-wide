@@ -15,6 +15,7 @@ External ID는 명령줄이 아니라 환경변수로만 받는다. --var-file�
 읽는다(주석 줄과 비어 있는 줄은 무시). 모듈 폴더는 이 저장소의 infra/user-account이고, 시험하는 코드와 적용한 코드가 같아야
 plan이 변경 없음으로 끝난다. 실행마다 provider를 내려받으므로 --plugin-cache(기본 ~/.terraform.d/plugin-cache)를 쓴다.
 """
+
 import argparse
 import json
 import os
@@ -48,7 +49,11 @@ def read_tfvars(path: str) -> dict:
 def make_log(verbose: bool):
     def log(event) -> None:
         collected.append(event.message)
-        if verbose or event.message.startswith("terraform ") or any(word in event.message for word in INTERESTING):
+        if (
+            verbose
+            or event.message.startswith("terraform ")
+            or any(word in event.message for word in INTERESTING)
+        ):
             print(f"    [{event.step}/{event.total}] {event.message}")
 
     return log
@@ -61,10 +66,18 @@ def main() -> int:
     parser.add_argument("--var-file", required=True, help="기반을 만들 때 쓴 test.tfvars")
     parser.add_argument("--env-id", default="test")
     parser.add_argument("--region", default="ap-northeast-2")
-    parser.add_argument("--module", default=str(Path(__file__).resolve().parents[2] / "user-account"))
-    parser.add_argument("--plugin-cache", default=str(Path.home() / ".terraform.d" / "plugin-cache"))
-    parser.add_argument("--outputs", help="`terraform output -json`을 저장한 파일(있으면 host와 비교한다)")
-    parser.add_argument("--verbose", action="store_true", help="Terraform의 모든 출력 줄을 보여 준다")
+    parser.add_argument(
+        "--module", default=str(Path(__file__).resolve().parents[2] / "user-account")
+    )
+    parser.add_argument(
+        "--plugin-cache", default=str(Path.home() / ".terraform.d" / "plugin-cache")
+    )
+    parser.add_argument(
+        "--outputs", help="`terraform output -json`을 저장한 파일(있으면 host와 비교한다)"
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Terraform의 모든 출력 줄을 보여 준다"
+    )
     args = parser.parse_args()
     external_id = os.environ.get("EXTERNAL_ID")
     if not external_id:
@@ -73,8 +86,13 @@ def main() -> int:
 
     cache = Path(args.plugin_cache)
     cache.mkdir(parents=True, exist_ok=True)
-    env = AwsEnvironment(env_id=args.env_id, role_arn=args.role_arn, external_id=external_id, region=args.region,
-                         state_bucket=args.state_bucket)
+    env = AwsEnvironment(
+        env_id=args.env_id,
+        role_arn=args.role_arn,
+        external_id=external_id,
+        region=args.region,
+        state_bucket=args.state_bucket,
+    )
     variables = read_tfvars(args.var_file)
     runner = TerraformRunner(Path(args.module), plugin_cache_dir=cache)
     log = make_log(args.verbose)
@@ -98,34 +116,57 @@ def main() -> int:
     print("2) read_foundation")
     filled = attempt("output", lambda: runner.read_foundation(env, log))
     ok = isinstance(filled, AwsEnvironment)
-    expect("출력이 기반 필드로 변환된다", ok and all((filled.host, filled.db_address, filled.db_port, filled.db_secret_arn)))
+    expect(
+        "출력이 기반 필드로 변환된다",
+        ok and all((filled.host, filled.db_address, filled.db_port, filled.db_secret_arn)),
+    )
     if ok:
-        print(f"      host={filled.host} db={filled.db_address.split('.')[0]} port={filled.db_port}")
+        print(
+            f"      host={filled.host} db={filled.db_address.split('.')[0]} port={filled.db_port}"
+        )
         if args.outputs:
             saved = json.loads(Path(args.outputs).read_text())
             expect("저장해 둔 출력과 host가 같다", saved["host_public_ip"]["value"] == filled.host)
 
     print("3) 같은 환경에 두 번째 실행을 동시에 시작")
-    first = threading.Thread(target=lambda: attempt("첫 번째", lambda: runner.plan(env, variables, lambda e: None)))
+    first = threading.Thread(
+        target=lambda: attempt("첫 번째", lambda: runner.plan(env, variables, lambda e: None))
+    )
     first.start()
     time.sleep(2)
     second = attempt("두 번째", lambda: runner.plan(env, variables, log))
-    expect("두 번째가 terraform_locked로 거부된다",
-           isinstance(second, TerraformError) and second.error.code == "terraform_locked")
+    expect(
+        "두 번째가 terraform_locked로 거부된다",
+        isinstance(second, TerraformError) and second.error.code == "terraform_locked",
+    )
     first.join()
-    expect("첫 번째가 끝난 뒤에는 다시 실행할 수 있다(잠금이 풀렸다)", not isinstance(
-        attempt("세 번째", lambda: runner.read_foundation(env, lambda e: None)), TerraformError))
+    expect(
+        "첫 번째가 끝난 뒤에는 다시 실행할 수 있다(잠금이 풀렸다)",
+        not isinstance(
+            attempt("세 번째", lambda: runner.read_foundation(env, lambda e: None)), TerraformError
+        ),
+    )
 
     print("4) 틀린 계정 ID로 plan (provider가 막아야 한다)")
-    wrong = attempt("틀린 계정", lambda: runner.plan(env, {**variables, "account_id": "000000000000"}, log))
-    expect("terraform_plan_failed로 보고된다", isinstance(wrong, TerraformError) and wrong.error.code == "terraform_plan_failed")
-    expect("계정 고정(allowed_account_ids) 메시지가 마지막 출력에 있다",
-           isinstance(wrong, TerraformError) and "not allowed" in wrong.tail)
+    wrong = attempt(
+        "틀린 계정", lambda: runner.plan(env, {**variables, "account_id": "000000000000"}, log)
+    )
+    expect(
+        "terraform_plan_failed로 보고된다",
+        isinstance(wrong, TerraformError) and wrong.error.code == "terraform_plan_failed",
+    )
+    expect(
+        "계정 고정(allowed_account_ids) 메시지가 마지막 출력에 있다",
+        isinstance(wrong, TerraformError) and "not allowed" in wrong.tail,
+    )
 
     print("5) 비밀과 임시 파일")
     text = "\n".join(collected)
     expect("로그와 오류에 External ID가 없다", external_id not in text)
-    expect("로그와 오류에 자격 증명 변수 이름의 값 대입이 없다", "AWS_SECRET_ACCESS_KEY=" not in text and "AWS_SESSION_TOKEN=" not in text)
+    expect(
+        "로그와 오류에 자격 증명 변수 이름의 값 대입이 없다",
+        "AWS_SECRET_ACCESS_KEY=" not in text and "AWS_SESSION_TOKEN=" not in text,
+    )
     left = list(Path(tempfile.gettempdir()).glob("anyship-tf-*"))
     expect("임시 폴더가 남지 않았다", not left)
 

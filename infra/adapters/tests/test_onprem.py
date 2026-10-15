@@ -2,14 +2,13 @@ import json
 from pathlib import Path
 
 import pytest
+from fakes import FakePopen, FakeServer, Log
+from specs import GENERATED, HAND_WRITTEN, make
 
 from anyship_adapters import OnpremEnvironment
 from anyship_adapters.compose_host import ComposeHost
 from anyship_adapters.onprem import OnpremAdapter
 from anyship_adapters.ssh import SshConnection, SshRunner
-
-from fakes import FakePopen, FakeServer, Log
-from specs import GENERATED, HAND_WRITTEN, make
 
 ENV = OnpremEnvironment(env_id="demo", host="3.38.88.141")
 TAG = "3f2a9c1"
@@ -21,7 +20,10 @@ RUN = ("docker", "compose", "--project-directory", "/opt/apps/todo", "run")
 def server(**overrides):
     """정상 서버: Traefik이 실행 중이고, 공개 IP를 알려 준다. overrides로 특정 명령만 바꾼다."""
     # 실제 서버에서 Compose로 띄운 컨테이너의 이름은 traefik이 아니라 traefik-traefik-1이다.
-    responses = {("docker", "ps"): (0, b"traefik-traefik-1\n", b""), ("curl",): (0, b"3.38.88.141\n", b"")}
+    responses = {
+        ("docker", "ps"): (0, b"traefik-traefik-1\n", b""),
+        ("curl",): (0, b"3.38.88.141\n", b""),
+    }
     responses.update({tuple(key.split()): value for key, value in overrides.items()})
     return FakeServer(responses=responses)
 
@@ -61,18 +63,24 @@ def test_the_proxy_is_found_by_its_compose_labels_not_by_a_container_name():
 
 
 def test_check_tells_a_failing_command_from_an_unreachable_server():
-    assert adapter(server(**{"true": (1, b"", b"")})).check(ENV, Log()).error.code == "ssh_command_failed"
+    assert (
+        adapter(server(**{"true": (1, b"", b"")})).check(ENV, Log()).error.code
+        == "ssh_command_failed"
+    )
 
 
-@pytest.mark.parametrize("overrides, code", [
-    ({"docker compose version": (1, b"", b"")}, "docker_missing"),
-    ({"docker ps": (0, b"", b"")}, "proxy_not_ready"),  # 실행 중인 Traefik이 없다
-    ({"curl": (0, b"10.0.0.5", b"")}, "public_ip_unknown"),  # 사설 주소
-    ({"curl": (0, b"169.254.169.254", b"")}, "public_ip_unknown"),
-    ({"curl": (0, b"<html>", b"")}, "public_ip_unknown"),
-    ({"curl": (0, b"2001:db8::1", b"")}, "public_ip_unknown"),  # IPv6는 지원하지 않는다
-    ({"curl": (22, b"", b"")}, "public_ip_unknown"),
-])
+@pytest.mark.parametrize(
+    "overrides, code",
+    [
+        ({"docker compose version": (1, b"", b"")}, "docker_missing"),
+        ({"docker ps": (0, b"", b"")}, "proxy_not_ready"),  # 실행 중인 Traefik이 없다
+        ({"curl": (0, b"10.0.0.5", b"")}, "public_ip_unknown"),  # 사설 주소
+        ({"curl": (0, b"169.254.169.254", b"")}, "public_ip_unknown"),
+        ({"curl": (0, b"<html>", b"")}, "public_ip_unknown"),
+        ({"curl": (0, b"2001:db8::1", b"")}, "public_ip_unknown"),  # IPv6는 지원하지 않는다
+        ({"curl": (22, b"", b"")}, "public_ip_unknown"),
+    ],
+)
 def test_check_failures_have_a_specific_code(overrides, code):
     result = adapter(server(**overrides)).check(ENV, Log())
     assert not result.ok and result.error.code == code and result.error.hint
@@ -82,9 +90,20 @@ def test_check_failures_have_a_specific_code(overrides, code):
 def test_deploy_returns_the_public_url_after_seven_numbered_steps():
     log = Log()
     result = deploy(server(), log=log)
-    assert result.ok and result.url == "https://todo.demo.onprem.anyship.cloud" and result.image_tag == TAG
-    assert log.steps() == [(1, 7, "환경 점검"), (2, 7, "DNS 준비"), (3, 7, "이미지 전달"), (4, 7, "파일 쓰기"),
-                           (5, 7, "앱 시작"), (6, 7, "마이그레이션"), (7, 7, "헬스체크")]
+    assert (
+        result.ok
+        and result.url == "https://todo.demo.onprem.anyship.cloud"
+        and result.image_tag == TAG
+    )
+    assert log.steps() == [
+        (1, 7, "환경 점검"),
+        (2, 7, "DNS 준비"),
+        (3, 7, "이미지 전달"),
+        (4, 7, "파일 쓰기"),
+        (5, 7, "앱 시작"),
+        (6, 7, "마이그레이션"),
+        (7, 7, "헬스체크"),
+    ]
 
 
 def test_deploy_does_things_in_a_safe_order():
@@ -113,9 +132,13 @@ def test_the_address_follows_the_environment_and_the_domain():
     ssh = SshRunner(SshConnection("3.38.88.141", Path("/key")), runner=srv)
     host = ComposeHost(ssh, popen=lambda c, **k: FakePopen(c, **k))
     seen = []
-    onprem = OnpremAdapter(Path("/key"), base_domain="example.org", connect=lambda e: (ssh, host),
-                           healthy=lambda url, verify_tls: seen.append((url, verify_tls)) or (True, 200),
-                           verify_tls=False)
+    onprem = OnpremAdapter(
+        Path("/key"),
+        base_domain="example.org",
+        connect=lambda e: (ssh, host),
+        healthy=lambda url, verify_tls: seen.append((url, verify_tls)) or (True, 200),
+        verify_tls=False,
+    )
     result = onprem.deploy(ssh_env, GENERATED, TAG, {}, Log(), set_name="onprem")
     assert result.url == "https://todo.team7.onprem.example.org"
     assert seen == [("https://todo.team7.onprem.example.org/healthz", False)]
@@ -138,13 +161,16 @@ def test_warnings_are_logged_and_returned():
 
 
 # --- deploy: 실패 -----------------------------------------------------------------------------
-@pytest.mark.parametrize("overrides, kw, code, last_step", [
-    ({"true": (255, b"", b"")}, {}, "ssh_unreachable", 1),
-    ({"docker load": (1, b"", b"no space")}, {}, "image_transfer_failed", 3),
-    ({" ".join(UP): (1, b"", b"port in use")}, {}, "container_start_failed", 5),
-    ({" ".join(RUN): (1, b"", b"relation missing")}, {}, "migration_failed", 6),
-    ({}, {"healthy": lambda url, verify_tls: (False, 502)}, "healthcheck_failed", 7),
-])
+@pytest.mark.parametrize(
+    "overrides, kw, code, last_step",
+    [
+        ({"true": (255, b"", b"")}, {}, "ssh_unreachable", 1),
+        ({"docker load": (1, b"", b"no space")}, {}, "image_transfer_failed", 3),
+        ({" ".join(UP): (1, b"", b"port in use")}, {}, "container_start_failed", 5),
+        ({" ".join(RUN): (1, b"", b"relation missing")}, {}, "migration_failed", 6),
+        ({}, {"healthy": lambda url, verify_tls: (False, 502)}, "healthcheck_failed", 7),
+    ],
+)
 def test_each_failure_has_its_own_code_and_stops_the_deploy(overrides, kw, code, last_step):
     srv, log = server(**overrides), Log()
     result = deploy(srv, log=log, **kw)
@@ -168,9 +194,17 @@ def test_the_health_failure_message_includes_the_last_status():
 def test_bad_requests_are_rejected_before_touching_the_server():
     srv = server()
     assert deploy(srv, {"app": "Bad Name"}).error.code == "invalid_spec"
-    assert adapter(srv).deploy(ENV, GENERATED, TAG, {}, Log(), set_name="aws-always-on").error.code == "set_not_supported"
-    assert adapter(srv).deploy(ENV, GENERATED, "latest", {}, Log(), set_name="onprem").error.code == "invalid_image_tag"
-    assert deploy(srv, make(env=[{"name": "API_KEY", "secret": True}])).error.code == "missing_secret"
+    assert (
+        adapter(srv).deploy(ENV, GENERATED, TAG, {}, Log(), set_name="aws-always-on").error.code
+        == "set_not_supported"
+    )
+    assert (
+        adapter(srv).deploy(ENV, GENERATED, "latest", {}, Log(), set_name="onprem").error.code
+        == "invalid_image_tag"
+    )
+    assert (
+        deploy(srv, make(env=[{"name": "API_KEY", "secret": True}])).error.code == "missing_secret"
+    )
     assert srv.commands == []  # 서버에 접속조차 하지 않았다
 
 
@@ -188,10 +222,13 @@ def test_server_errors_are_shown_with_secrets_removed_including_secrets_read_fro
     srv, log = server(), Log()
     deploy(srv)  # 첫 배포가 서버에 SECRET_KEY를 만든다
     stored = srv.files["/opt/apps/todo/app.env"].decode()
-    server_secret = next(line for line in stored.splitlines() if line.startswith("SECRET_KEY")).split("'")[1]
+    server_secret = next(
+        line for line in stored.splitlines() if line.startswith("SECRET_KEY")
+    ).split("'")[1]
     srv.responses[UP] = (1, b"", f"crash SECRET_KEY={server_secret}".encode())
-    result = deploy(srv, make(env=[{"name": "SECRET_KEY", "secret": True, "generate": True}]),
-                    {}, log)
+    result = deploy(
+        srv, make(env=[{"name": "SECRET_KEY", "secret": True, "generate": True}]), {}, log
+    )
     leaked = log.text() + json.dumps(result.details) + result.model_dump_json()
     assert server_secret not in leaked and not result.ok
     assert "***" in result.details["stderr"]

@@ -14,6 +14,7 @@
 
 --keep을 주면 마지막에 destroy하지 않고 앱을 남긴다.
 """
+
 import argparse
 import json
 import os
@@ -22,9 +23,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-import yaml
-
 import smoke_onprem as base
+import yaml
 from smoke_image_builder import assemble, docker
 from smoke_onprem import expect, log, show, timed
 from smoke_sample_deploy import request
@@ -63,8 +63,12 @@ def main() -> int:
     parser.add_argument("--domain", default="anyship.cloud")
     parser.add_argument("--sample", default=str(ROOT / "AI" / "samples" / "todo"))
     parser.add_argument("--out", default=str(ROOT / "AI" / "ai" / "demo-cache" / "todo" / "out"))
-    parser.add_argument("--plugin-cache", default=str(Path.home() / ".terraform.d" / "plugin-cache"))
-    parser.add_argument("--staging", action="store_true", help="Let's Encrypt staging 인증서면 TLS 검증을 끈다")
+    parser.add_argument(
+        "--plugin-cache", default=str(Path.home() / ".terraform.d" / "plugin-cache")
+    )
+    parser.add_argument(
+        "--staging", action="store_true", help="Let's Encrypt staging 인증서면 TLS 검증을 끈다"
+    )
     parser.add_argument("--keep", action="store_true", help="마지막에 destroy하지 않고 앱을 남긴다")
     args = parser.parse_args()
     external_id = os.environ.get("EXTERNAL_ID")
@@ -84,23 +88,52 @@ def main() -> int:
     try:
         cache = Path(args.plugin_cache)
         cache.mkdir(parents=True, exist_ok=True)
-        env = AwsEnvironment(env_id=args.env_id, role_arn=args.role_arn, external_id=external_id, region=args.region,
-                             state_bucket=args.state_bucket)
-        adapter = AwsAlwaysOnAdapter(Path(args.key), base_domain=args.domain, verify_tls=not args.staging)
-        runner = ReadOnlyRunner(TerraformRunner(ROOT / "infra" / "user-account", plugin_cache_dir=cache))
-        settings = FoundationSettings(service_server_ip="203.0.113.1", ssh_public_key="ssh-ed25519 unused",
-                                      acme_email="unused@example.com")  # 기반을 만들지 않으므로 쓰이지 않는다
-        deployer = Deployer({"aws-always-on": adapter}, ImageBuilder(timeout=900), runner=runner, foundation=settings)
+        env = AwsEnvironment(
+            env_id=args.env_id,
+            role_arn=args.role_arn,
+            external_id=external_id,
+            region=args.region,
+            state_bucket=args.state_bucket,
+        )
+        adapter = AwsAlwaysOnAdapter(
+            Path(args.key), base_domain=args.domain, verify_tls=not args.staging
+        )
+        runner = ReadOnlyRunner(
+            TerraformRunner(ROOT / "infra" / "user-account", plugin_cache_dir=cache)
+        )
+        settings = FoundationSettings(
+            service_server_ip="203.0.113.1",
+            ssh_public_key="ssh-ed25519 unused",
+            acme_email="unused@example.com",
+        )  # 기반을 만들지 않으므로 쓰이지 않는다
+        deployer = Deployer(
+            {"aws-always-on": adapter},
+            ImageBuilder(timeout=900),
+            runner=runner,
+            foundation=settings,
+        )
         url = f"https://{app}.{args.env_id}.aws.{args.domain}"
         assemble(Path(args.sample), Path(args.out), work / "source", plant=False)
 
         print("1) 잘못된 입력은 아무것도 시작하기 전에 거절된다")
-        wrong_set = deployer.deploy(env, spec, work / "source", SHA, {}, lambda e: None, set_name="onprem")
-        expect("세트와 환경이 맞지 않으면 spec 단계에서 거절", not wrong_set.ok and wrong_set.details["stage"] == "spec")
-        expect("거절되었으니 이미지가 만들어지지 않았다", docker("image", "inspect", image).returncode != 0)
+        wrong_set = deployer.deploy(
+            env, spec, work / "source", SHA, {}, lambda e: None, set_name="onprem"
+        )
+        expect(
+            "세트와 환경이 맞지 않으면 spec 단계에서 거절",
+            not wrong_set.ok and wrong_set.details["stage"] == "spec",
+        )
+        expect(
+            "거절되었으니 이미지가 만들어지지 않았다",
+            docker("image", "inspect", image).returncode != 0,
+        )
 
         print("2) Deployer.deploy 한 번 호출")
-        result = timed(lambda: deployer.deploy(env, spec, work / "source", SHA, {}, record, set_name="aws-always-on"))
+        result = timed(
+            lambda: deployer.deploy(
+                env, spec, work / "source", SHA, {}, record, set_name="aws-always-on"
+            )
+        )
         show(result)
         expect("배포가 성공하고 주소가 맞다", result.ok and result.url == url)
         if not result.ok:
@@ -109,11 +142,24 @@ def main() -> int:
         print("3) 로그와 결과")
         stages = [(e.step, e.total, e.name) for e in events if e.step]
         names = [name for _, _, name in dict.fromkeys(stages)]
-        expect("로그가 5단계로 이어진다", {t for _, t, _ in stages} == {5} and sorted({s for s, _, _ in stages}) == [1, 2, 3, 4, 5])
-        expect("단계 이름 순서가 맞다", names == ["이미지 빌드", "공용 기반 확인", "연결 확인", "배포", "정리"])
-        expect("단계 번호가 거꾸로 가지 않는다", [s for s, _, _ in stages] == sorted(s for s, _, _ in stages))
-        expect("기반 값이 결과에 실린다(만들지는 않았다)",
-               result.details.get("foundation_created") is False and all(result.details["foundation"].values()))
+        expect(
+            "로그가 5단계로 이어진다",
+            {t for _, t, _ in stages} == {5}
+            and sorted({s for s, _, _ in stages}) == [1, 2, 3, 4, 5],
+        )
+        expect(
+            "단계 이름 순서가 맞다",
+            names == ["이미지 빌드", "공용 기반 확인", "연결 확인", "배포", "정리"],
+        )
+        expect(
+            "단계 번호가 거꾸로 가지 않는다",
+            [s for s, _, _ in stages] == sorted(s for s, _, _ in stages),
+        )
+        expect(
+            "기반 값이 결과에 실린다(만들지는 않았다)",
+            result.details.get("foundation_created") is False
+            and all(result.details["foundation"].values()),
+        )
         expect("이미지가 결과에 실린다", result.details.get("image") == image)
 
         print("4) 공개 주소에서 앱 확인")
@@ -135,8 +181,14 @@ def main() -> int:
         else:
             print("5) destroy")
             gone = timed(lambda: adapter.destroy(env_after, app, log))
-            expect("삭제가 성공한다", gone.ok and adapter.status(env_after, app).state == "not_deployed")
-            expect("삭제 뒤 주소가 200이 아니다", request("GET", url + "/healthz", args.staging)[0] != 200)
+            expect(
+                "삭제가 성공한다",
+                gone.ok and adapter.status(env_after, app).state == "not_deployed",
+            )
+            expect(
+                "삭제 뒤 주소가 200이 아니다",
+                request("GET", url + "/healthz", args.staging)[0] != 200,
+            )
     finally:
         shutil.rmtree(work, ignore_errors=True)
         if not args.keep:

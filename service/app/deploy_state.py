@@ -6,10 +6,12 @@
 
 각 함수는 값을 바꾸면 곧바로 커밋한다. 호출하는 쪽의 다른 트랜잭션과 섞지 않는다.
 """
+
 import uuid
 
-from anyship_adapters import AwsEnvironment as AdapterEnvironment
 from pydantic import ValidationError
+
+from anyship_adapters import AwsEnvironment as AdapterEnvironment
 
 from .db import AwsEnvironment
 
@@ -36,15 +38,24 @@ def assign_env_id(session, row: AwsEnvironment) -> str:
 def adapter_environment(row: AwsEnvironment) -> AdapterEnvironment:
     """어댑터에 넘길 환경. 연결이 확인된(`CONNECTED`) 환경만 만든다. 모의 배포와 달리 저장만 한 ARN으로 대신하지 않는다."""
     if row.status != "CONNECTED" or not row.role_arn:
-        raise DeployStateError("environment_not_connected", "AWS 연결이 확인된 환경만 배포에 사용할 수 있습니다.")
+        raise DeployStateError(
+            "environment_not_connected", "AWS 연결이 확인된 환경만 배포에 사용할 수 있습니다."
+        )
     if row.env_id is None:
         raise DeployStateError("env_id_missing", "환경의 배포용 식별자가 아직 정해지지 않았습니다.")
     optional = {name: getattr(row, name) for name in _OPTIONAL if getattr(row, name) is not None}
     try:
-        return AdapterEnvironment(env_id=row.env_id, role_arn=row.role_arn, external_id=row.external_id,
-                                  region=row.region, **optional)
+        return AdapterEnvironment(
+            env_id=row.env_id,
+            role_arn=row.role_arn,
+            external_id=row.external_id,
+            region=row.region,
+            **optional,
+        )
     except ValidationError:  # 오류에 값이 담기므로 그대로 올리지 않는다
-        raise DeployStateError("environment_invalid", "저장된 환경 정보가 배포 형식에 맞지 않습니다.") from None
+        raise DeployStateError(
+            "environment_invalid", "저장된 환경 정보가 배포 형식에 맞지 않습니다."
+        ) from None
 
 
 def ensure_state_bucket(session, row: AwsEnvironment, access) -> str:
@@ -64,7 +75,9 @@ def save_foundation(session, row: AwsEnvironment, fields) -> None:
     try:
         AdapterEnvironment(**{**base, **fields})
     except ValidationError:
-        raise DeployStateError("foundation_invalid", "기반 값이 올바르지 않거나 이 계정의 것이 아닙니다.") from None
+        raise DeployStateError(
+            "foundation_invalid", "기반 값이 올바르지 않거나 이 계정의 것이 아닙니다."
+        ) from None
     for name in FOUNDATION_FIELDS:
         setattr(row, name, fields[name])
     session.commit()

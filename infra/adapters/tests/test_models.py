@@ -2,6 +2,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from anyship_adapters import (
+    SET_NAMES,
     AdapterError,
     AwsEnvironment,
     CheckResult,
@@ -9,7 +10,6 @@ from anyship_adapters import (
     Environment,
     LogEvent,
     OnpremEnvironment,
-    SET_NAMES,
     StatusResult,
 )
 
@@ -68,10 +68,16 @@ def test_onprem_rejects_bad_connection_values(override):
 
 def test_environment_union_picks_the_class_from_kind():
     adapter = TypeAdapter(Environment)
-    assert isinstance(adapter.validate_python({"kind": "onprem", "env_id": "demo", "host": "h.example.com"}),
-                      OnpremEnvironment)
-    assert isinstance(adapter.validate_python({"kind": "aws", "env_id": "demo", "role_arn": ROLE_ARN,
-                                               "external_id": EXTERNAL_ID}), AwsEnvironment)
+    assert isinstance(
+        adapter.validate_python({"kind": "onprem", "env_id": "demo", "host": "h.example.com"}),
+        OnpremEnvironment,
+    )
+    assert isinstance(
+        adapter.validate_python(
+            {"kind": "aws", "env_id": "demo", "role_arn": ROLE_ARN, "external_id": EXTERNAL_ID}
+        ),
+        AwsEnvironment,
+    )
     with pytest.raises(ValidationError):
         adapter.validate_python({"kind": "gcp", "env_id": "demo"})
 
@@ -106,7 +112,9 @@ def test_log_event_defaults_and_step_bounds():
 # --- 결과 ---------------------------------------------------------------------------
 def test_result_is_either_ok_or_failed_with_an_error():
     assert CheckResult(ok=True).error is None
-    failure = CheckResult(ok=False, error=AdapterError(code="ssh_unreachable", message="cannot connect"))
+    failure = CheckResult(
+        ok=False, error=AdapterError(code="ssh_unreachable", message="cannot connect")
+    )
     assert failure.error.code == "ssh_unreachable"
     with pytest.raises(ValidationError):
         CheckResult(ok=False)
@@ -121,7 +129,9 @@ def test_error_code_must_be_machine_readable():
 
 
 def test_deploy_and_status_results_carry_their_extras():
-    deployed = DeployResult(ok=True, url="https://todo-a1b2.demo.onprem.anyship.cloud", image_tag="3f2a9c1")
+    deployed = DeployResult(
+        ok=True, url="https://todo-a1b2.demo.onprem.anyship.cloud", image_tag="3f2a9c1"
+    )
     assert deployed.url.startswith("https://")
     assert StatusResult(ok=True, state="running").state == "running"
     with pytest.raises(ValidationError):
@@ -134,21 +144,32 @@ BUCKET = "anyship-tfstate-123456789012-ap-northeast-2-2b9b6060"  # ROLE_ARN의 �
 
 def test_state_bucket_is_optional_and_accepts_the_names_the_template_creates():
     assert aws().state_bucket is None
-    for name in (BUCKET, "anyship-tfstate-123456789012-us-east-1-0123abcd",
-                 "anyship-tfstate-123456789012-ap-southeast-2-ffffffff"):
+    for name in (
+        BUCKET,
+        "anyship-tfstate-123456789012-us-east-1-0123abcd",
+        "anyship-tfstate-123456789012-ap-southeast-2-ffffffff",
+    ):
         assert aws(state_bucket=name).state_bucket == name
 
 
-@pytest.mark.parametrize("name", [
-    "anyship-tfstate-123456789012-ap-northeast-2-2B9B6060",  # 대문자
-    "anyship-tfstate-123456789012-ap-northeast-2-2b9b606",  # 접미사 7자
-    "anyship-tfstate-123456789012-ap-northeast-2-2b9b60601",  # 접미사 9자
-    "anyship-tfstate-123456789012-ap-northeast-2",  # 접미사 없음
-    "anyship-tfstate-12345678901-ap-northeast-2-2b9b6060",  # 계정 ID 11자리
-    "other-tfstate-123456789012-ap-northeast-2-2b9b6060",  # 접두사만 다르고 나머지는 올바른 이름
-    "evil-bucket-123456789012-ap-northeast-2-2b9b6060",
-    "other-bucket", "", " " + BUCKET, BUCKET + "\n", BUCKET + "/../other", BUCKET + " --evil",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "anyship-tfstate-123456789012-ap-northeast-2-2B9B6060",  # 대문자
+        "anyship-tfstate-123456789012-ap-northeast-2-2b9b606",  # 접미사 7자
+        "anyship-tfstate-123456789012-ap-northeast-2-2b9b60601",  # 접미사 9자
+        "anyship-tfstate-123456789012-ap-northeast-2",  # 접미사 없음
+        "anyship-tfstate-12345678901-ap-northeast-2-2b9b6060",  # 계정 ID 11자리
+        "other-tfstate-123456789012-ap-northeast-2-2b9b6060",  # 접두사만 다르고 나머지는 올바른 이름
+        "evil-bucket-123456789012-ap-northeast-2-2b9b6060",
+        "other-bucket",
+        "",
+        " " + BUCKET,
+        BUCKET + "\n",
+        BUCKET + "/../other",
+        BUCKET + " --evil",
+    ],
+)
 def test_state_bucket_rejects_anything_but_the_template_naming(name):
     with pytest.raises(ValidationError):
         aws(state_bucket=name)
@@ -167,5 +188,11 @@ def test_a_secret_of_another_account_is_rejected():
 
 
 def test_state_bucket_is_kept_when_the_environment_is_parsed_from_stored_data():
-    row = {"kind": "aws", "env_id": "demo", "role_arn": ROLE_ARN, "external_id": EXTERNAL_ID, "state_bucket": BUCKET}
+    row = {
+        "kind": "aws",
+        "env_id": "demo",
+        "role_arn": ROLE_ARN,
+        "external_id": EXTERNAL_ID,
+        "state_bucket": BUCKET,
+    }
     assert TypeAdapter(Environment).validate_python(row).state_bucket == BUCKET

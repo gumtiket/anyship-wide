@@ -1,0 +1,11 @@
+# 저장소 공통 Python 린트·포맷 설정. AI/ai는 자체 pyproject.toml 설정(py312)을 쓴다.
+line-length = 100
+target-version = "py310"
+src = ["service", "infra/adapters", "scripts"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501", # 줄 길이는 포매터가 맞추고, 사용자 안내 문구 같은 긴 문자열은 허용한다.
+    "B008", # FastAPI의 Depends()는 기본값 위치에서 호출하는 것이 관례다.
+]

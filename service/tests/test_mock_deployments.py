@@ -1,48 +1,73 @@
 """Service -> Infra MockAdapter integration; no external cloud or repository writes."""
-from dataclasses import replace
+
 import json
 import threading
 import time
-from types import SimpleNamespace
 import uuid
+from dataclasses import replace
+from types import SimpleNamespace
 
-from anyship_adapters import LogEvent, MockAdapter
+import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import pytest
 from sqlalchemy import select
 
+from anyship_adapters import LogEvent, MockAdapter
 from app.app import create_app
 from app.config import Settings
-from app.db import AwsEnvironment, Base, MockDeployment, MockJob
+from app.db import Base, MockDeployment, MockJob
 from tests.test_aws_onboarding import SERVICE_ROLE, TEMPLATE, authenticate, create, save_role
-from tests.test_web import FakeGitHub, ORIGIN, add
+from tests.test_web import ORIGIN, FakeGitHub, add
 
 
 @pytest.fixture
 def mock_web(database_url):
-    settings = Settings(database_url=database_url, token_key=Fernet.generate_key().decode(),
-        github_client_id="fixture", github_client_secret="fixture", github_app_slug="fixture",
-        aws_template_url=TEMPLATE, aws_service_role_arn=SERVICE_ROLE, aws_regions=("ap-northeast-2",),
-        deployment_mode="mock", mock_step_delay=0)
+    settings = Settings(
+        database_url=database_url,
+        token_key=Fernet.generate_key().decode(),
+        github_client_id="fixture",
+        github_client_secret="fixture",
+        github_app_slug="fixture",
+        aws_template_url=TEMPLATE,
+        aws_service_role_arn=SERVICE_ROLE,
+        aws_regions=("ap-northeast-2",),
+        deployment_mode="mock",
+        mock_step_delay=0,
+    )
     app = create_app(settings, FakeGitHub())
     Base.metadata.create_all(app.state.engine)
     with TestClient(app, base_url=ORIGIN) as client:
         headers = authenticate(client)
         project = add(client, headers).json()
-        yield SimpleNamespace(app=app, client=client, headers=headers, settings=settings,
-                              project=project, endpoint=f"/api/projects/{project['id']}/mock-deployment")
+        yield SimpleNamespace(
+            app=app,
+            client=client,
+            headers=headers,
+            settings=settings,
+            project=project,
+            endpoint=f"/api/projects/{project['id']}/mock-deployment",
+        )
 
 
 def select_target(web, source="sample-aws", set_name="aws-always-on"):
-    response = web.client.put(web.endpoint, headers=web.headers, json={"source": source, "set_name": set_name})
+    response = web.client.put(
+        web.endpoint, headers=web.headers, json={"source": source, "set_name": set_name}
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
 
 def submit(web, action="check", tag="", scenario="success", request_id=None):
-    return web.client.post(web.endpoint + "/jobs", headers=web.headers, json={
-        "request_id": request_id or str(uuid.uuid4()), "action": action, "image_tag": tag, "scenario": scenario})
+    return web.client.post(
+        web.endpoint + "/jobs",
+        headers=web.headers,
+        json={
+            "request_id": request_id or str(uuid.uuid4()),
+            "action": action,
+            "image_tag": tag,
+            "scenario": scenario,
+        },
+    )
 
 
 def finish(web, response):
@@ -66,8 +91,14 @@ def current(web):
     return response.json()["target"]
 
 
-@pytest.mark.parametrize("source,set_name", [
-    ("sample-aws", "aws-always-on"), ("sample-aws", "aws-serverless"), ("sample-onprem", "onprem")])
+@pytest.mark.parametrize(
+    "source,set_name",
+    [
+        ("sample-aws", "aws-always-on"),
+        ("sample-aws", "aws-serverless"),
+        ("sample-onprem", "onprem"),
+    ],
+)
 def test_full_lifecycle_and_version_history(mock_web, source, set_name):
     web = mock_web
     target = select_target(web, source, set_name)
@@ -85,7 +116,17 @@ def test_full_lifecycle_and_version_history(mock_web, source, set_name):
     assert submit(web, "rollback", "ccccccc").status_code == 409
     assert run(web, "rollback", "aaaaaaa")["status"] == "succeeded"
     assert current(web)["image_tag"] == "aaaaaaa"
-    assert web.client.put(web.endpoint, headers=web.headers, json={"source": "sample-onprem" if source == "sample-aws" else "sample-aws", "set_name": "onprem" if source == "sample-aws" else "aws-always-on"}).status_code == 409
+    assert (
+        web.client.put(
+            web.endpoint,
+            headers=web.headers,
+            json={
+                "source": "sample-onprem" if source == "sample-aws" else "sample-aws",
+                "set_name": "onprem" if source == "sample-aws" else "aws-always-on",
+            },
+        ).status_code
+        == 409
+    )
     removed = run(web, "destroy")
     assert removed["status"] == "succeeded"
     assert current(web)["state"] == "not_deployed" and current(web)["example_url"] is None
@@ -94,15 +135,24 @@ def test_full_lifecycle_and_version_history(mock_web, source, set_name):
     assert len(web.client.get(web.endpoint + "/jobs?limit=2&offset=2").json()) == 2
     assert web.client.get(web.endpoint + "/jobs?limit=0").status_code == 422
     # Registration deletion removes only mock history and selection in the local DB.
-    assert web.client.delete(f"/api/projects/{web.project['id']}", headers=web.headers).status_code == 204
+    assert (
+        web.client.delete(f"/api/projects/{web.project['id']}", headers=web.headers).status_code
+        == 204
+    )
     with web.app.state.sessions() as session:
         assert session.get(MockDeployment, web.project["id"]) is None
         assert not session.scalar(select(MockJob.id))
 
 
-@pytest.mark.parametrize("scenario,action,code", [
-    ("check_fails", "check", "assume_role_denied"), ("check_fails", "deploy", "assume_role_denied"),
-    ("deploy_fails", "deploy", "container_start_failed"), ("unhealthy", "deploy", "healthcheck_failed")])
+@pytest.mark.parametrize(
+    "scenario,action,code",
+    [
+        ("check_fails", "check", "assume_role_denied"),
+        ("check_fails", "deploy", "assume_role_denied"),
+        ("deploy_fails", "deploy", "container_start_failed"),
+        ("unhealthy", "deploy", "healthcheck_failed"),
+    ],
+)
 def test_failure_scenarios_retain_cause_and_allow_new_request(mock_web, scenario, action, code):
     select_target(mock_web)
     if action == "deploy":
@@ -133,7 +183,12 @@ def test_real_aws_registration_is_never_marked_verified(mock_web):
     assert web.client.get(f"/api/aws/environments/{environment['id']}").json() == original
     config = web.client.get("/api/config").json()
     assert config["deployment_mode"] == "mock" and not config["aws_verification_available"]
-    assert web.client.delete(f"/api/aws/environments/{environment['id']}", headers=web.headers).status_code == 204
+    assert (
+        web.client.delete(
+            f"/api/aws/environments/{environment['id']}", headers=web.headers
+        ).status_code
+        == 204
+    )
     assert current(web) is None
     assert len(web.client.get(web.endpoint + "/jobs").json()) == 2
 
@@ -161,9 +216,24 @@ def test_async_idempotency_conflicts_and_deletion_guards(mock_web):
         assert again.status_code == 200 and first.json()["id"] == again.json()["id"]
         assert submit(web, scenario="check_fails", request_id=request_id).status_code == 409
         assert submit(web).status_code == 409
-        assert web.client.delete(f"/api/projects/{web.project['id']}", headers=web.headers).status_code == 409
-        assert web.client.delete(f"/api/aws/environments/{environment['id']}", headers=web.headers).status_code == 409
-        assert web.client.put(web.endpoint, headers=web.headers, json={"source": "sample-onprem", "set_name": "onprem"}).status_code == 409
+        assert (
+            web.client.delete(f"/api/projects/{web.project['id']}", headers=web.headers).status_code
+            == 409
+        )
+        assert (
+            web.client.delete(
+                f"/api/aws/environments/{environment['id']}", headers=web.headers
+            ).status_code
+            == 409
+        )
+        assert (
+            web.client.put(
+                web.endpoint,
+                headers=web.headers,
+                json={"source": "sample-onprem", "set_name": "onprem"},
+            ).status_code
+            == 409
+        )
     finally:
         release.set()
     assert finish(web, first)["status"] == "succeeded"
@@ -174,31 +244,66 @@ def test_owner_csrf_and_input_validation(mock_web):
     web = mock_web
     body = {"source": "sample-aws", "set_name": "aws-always-on"}
     assert web.client.put(web.endpoint, json=body).status_code == 403
-    assert web.client.put(web.endpoint, json=body, headers={**web.headers, "Origin": "https://bad.invalid"}).status_code == 403
-    assert web.client.put(web.endpoint, json=body, headers={**web.headers, "X-CSRF-Token": "bad"}).status_code == 403
-    assert web.client.put(web.endpoint, json={**body, "source": str(uuid.uuid4())}, headers=web.headers).status_code == 404
-    assert web.client.put(web.endpoint, json={**body, "set_name": "onprem"}, headers=web.headers).status_code == 422
+    assert (
+        web.client.put(
+            web.endpoint, json=body, headers={**web.headers, "Origin": "https://bad.invalid"}
+        ).status_code
+        == 403
+    )
+    assert (
+        web.client.put(
+            web.endpoint, json=body, headers={**web.headers, "X-CSRF-Token": "bad"}
+        ).status_code
+        == 403
+    )
+    assert (
+        web.client.put(
+            web.endpoint, json={**body, "source": str(uuid.uuid4())}, headers=web.headers
+        ).status_code
+        == 404
+    )
+    assert (
+        web.client.put(
+            web.endpoint, json={**body, "set_name": "onprem"}, headers=web.headers
+        ).status_code
+        == 422
+    )
     select_target(web)
     job = run(web)
     assert submit(web, "deploy", "latest").status_code == 422
     assert submit(web, "deploy", "").status_code == 422
     assert submit(web, "check", "aaaaaaa").status_code == 422
-    body = {"request_id": str(uuid.uuid4()), "action": "deploy", "image_tag": "aaaaaaa", "secrets": {"TOKEN": "not-accepted"}}
+    body = {
+        "request_id": str(uuid.uuid4()),
+        "action": "deploy",
+        "image_tag": "aaaaaaa",
+        "secrets": {"TOKEN": "not-accepted"},
+    }
     rejected = web.client.post(web.endpoint + "/jobs", headers=web.headers, json=body)
     assert rejected.status_code == 422 and "not-accepted" not in rejected.text
-    with TestClient(create_app(replace(web.settings, deployment_mode="unavailable"), FakeGitHub()), base_url=ORIGIN) as outsider:
+    with TestClient(
+        create_app(replace(web.settings, deployment_mode="unavailable"), FakeGitHub()),
+        base_url=ORIGIN,
+    ) as outsider:
         assert outsider.get(web.endpoint).status_code == 401
         # A separate identity, including membership in the same workspace, cannot view the owner's mock jobs.
         from app.db import LoginSession, Membership
+
         gateway = FakeGitHub()
         gateway.profile = lambda token: {"id": 9999, "login": "other"}
         other_app = create_app(replace(web.settings, deployment_mode="unavailable"), gateway)
         with TestClient(other_app, base_url=ORIGIN) as other:
             headers = authenticate(other)
             with web.app.state.sessions() as session:
-                row = session.scalar(select(LoginSession).where(LoginSession.csrf == headers["X-CSRF-Token"]))
+                row = session.scalar(
+                    select(LoginSession).where(LoginSession.csrf == headers["X-CSRF-Token"])
+                )
                 me = web.client.get("/api/me").json()
-                session.add(Membership(user_id=row.user_id, workspace_id=me["workspace"]["id"], role="owner"))
+                session.add(
+                    Membership(
+                        user_id=row.user_id, workspace_id=me["workspace"]["id"], role="owner"
+                    )
+                )
                 row.workspace_id = me["workspace"]["id"]
                 session.commit()
             # Reuse those cookies against the running mock application without starting another worker.
@@ -206,7 +311,14 @@ def test_owner_csrf_and_input_validation(mock_web):
             visitor.cookies.update(other.cookies)
             assert visitor.get(web.endpoint).status_code == 404
             assert visitor.get(web.endpoint + "/jobs/" + job["id"]).status_code == 404
-            assert visitor.post(web.endpoint + "/jobs", headers=headers, json={"request_id": str(uuid.uuid4()), "action": "check"}).status_code == 404
+            assert (
+                visitor.post(
+                    web.endpoint + "/jobs",
+                    headers=headers,
+                    json={"request_id": str(uuid.uuid4()), "action": "check"},
+                ).status_code
+                == 404
+            )
 
 
 def test_restart_keeps_history_but_clears_memory_and_interrupts_abandoned_jobs(mock_web):
@@ -221,20 +333,37 @@ def test_restart_keeps_history_but_clears_memory_and_interrupts_abandoned_jobs(m
         target = session.get(MockDeployment, web.project["id"])
         stable_id = target.adapter_env_id
         target.active_job_id = abandoned_id
-        session.add(MockJob(id=abandoned_id, project_id=web.project["id"], request_id=str(uuid.uuid4()),
-            runtime_id=runner.runtime_id, adapter_env_id=stable_id, target_label=target.label,
-            set_name=target.set_name, action="deploy", scenario="success", image_tag="bbbbbbb",
-            status="running", created_at=int(time.time() * 1000)))
+        session.add(
+            MockJob(
+                id=abandoned_id,
+                project_id=web.project["id"],
+                request_id=str(uuid.uuid4()),
+                runtime_id=runner.runtime_id,
+                adapter_env_id=stable_id,
+                target_label=target.label,
+                set_name=target.set_name,
+                action="deploy",
+                scenario="success",
+                image_tag="bbbbbbb",
+                status="running",
+                created_at=int(time.time() * 1000),
+            )
+        )
         session.commit()
     restarted = create_app(web.settings, FakeGitHub())
     with TestClient(restarted, base_url=ORIGIN) as browser:
         browser.cookies.update(web.client.cookies)
         target = browser.get(web.endpoint).json()["target"]
-        assert target["state"] == "not_deployed" and not target["checked"] and target["versions"] == []
+        assert (
+            target["state"] == "not_deployed" and not target["checked"] and target["versions"] == []
+        )
         assert target["active_job_id"] is None
         assert browser.get(web.endpoint + "/jobs/" + deployed["id"]).json()["status"] == "succeeded"
         abandoned = browser.get(web.endpoint + "/jobs/" + abandoned_id).json()
-        assert abandoned["status"] == "interrupted" and abandoned["result"]["error"]["code"] == "worker_restarted"
+        assert (
+            abandoned["status"] == "interrupted"
+            and abandoned["result"]["error"]["code"] == "worker_restarted"
+        )
         with restarted.state.sessions() as session:
             assert session.get(MockDeployment, web.project["id"]).adapter_env_id == stable_id
 

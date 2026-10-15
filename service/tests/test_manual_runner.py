@@ -13,7 +13,6 @@ from tests.github_manual import (
     run_manual_test,
 )
 
-
 URL = "https://github.com/owner/repo"
 
 
@@ -38,7 +37,13 @@ def test_created(capsys):
 
 @pytest.mark.parametrize("json_output", [False, True])
 def test_pushed(capsys, json_output):
-    result = {"status": "pushed", "repository": "owner/repo", "path": "workspace", "branch": "work", "base_branch": "main"}
+    result = {
+        "status": "pushed",
+        "repository": "owner/repo",
+        "path": "workspace",
+        "branch": "work",
+        "base_branch": "main",
+    }
     args = ["publish", URL, "workspace"]
     if json_output:
         args.append("--json")

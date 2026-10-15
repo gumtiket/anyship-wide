@@ -1,25 +1,41 @@
 from pathlib import Path
 
 import pytest
+from fakes import Log
+from specs import GENERATED, make
 
-from anyship_adapters import AdapterError, AwsEnvironment, CheckResult, DeployResult, DestroyResult, LogEvent, OnpremEnvironment
+from anyship_adapters import (
+    AdapterError,
+    AwsEnvironment,
+    CheckResult,
+    DeployResult,
+    DestroyResult,
+    LogEvent,
+    OnpremEnvironment,
+)
 from anyship_adapters.deployer import Deployer
 from anyship_adapters.dns import DnsError
 from anyship_adapters.foundation import FoundationSettings
 from anyship_adapters.image_builder import BuildError, BuiltImage
 from anyship_adapters.terraform_runner import TerraformError
 
-from fakes import Log
-from specs import GENERATED, make
-
 SHA, SRC = "abc1234", Path("/srv/source")
 URL = "https://todo.test.aws.anyship.cloud"
 BUCKET = "anyship-tfstate-223455088214-ap-northeast-2-2b9b6060"
-FILLED = dict(host="43.201.158.8", db_address="anyship-test-db.abc.ap-northeast-2.rds.amazonaws.com", db_port=5432,
-              db_secret_arn="arn:aws:secretsmanager:ap-northeast-2:223455088214:secret:rds!db-abc-Xy1")
+FILLED = dict(
+    host="43.201.158.8",
+    db_address="anyship-test-db.abc.ap-northeast-2.rds.amazonaws.com",
+    db_port=5432,
+    db_secret_arn="arn:aws:secretsmanager:ap-northeast-2:223455088214:secret:rds!db-abc-Xy1",
+)
 SETTINGS = FoundationSettings("203.0.113.10", "ssh-ed25519 AAAA deploy", "ops@example.com")
-ENV = AwsEnvironment(env_id="test", role_arn="arn:aws:iam::223455088214:role/deploy-service-role",
-                     external_id="ext-id-0123456789abcdef", state_bucket=BUCKET, host="1.1.1.1")  # 서비스에 저장된 낡은 값
+ENV = AwsEnvironment(
+    env_id="test",
+    role_arn="arn:aws:iam::223455088214:role/deploy-service-role",
+    external_id="ext-id-0123456789abcdef",
+    state_bucket=BUCKET,
+    host="1.1.1.1",
+)  # 서비스에 저장된 낡은 값
 ONPREM_ENV = OnpremEnvironment(env_id="demo", host="203.0.113.5")
 USER_SECRET = "sk-live-0123456789abcdef"
 
@@ -33,7 +49,9 @@ class Parts:
 
     def __init__(self):
         self.order, self.builds, self.checks, self.deploys, self.applied = [], [], [], [], []
-        self.build_error = self.runner_reads = self.check_result = self.deploy_result = self.prune_error = None
+        self.build_error = self.runner_reads = self.check_result = self.deploy_result = (
+            self.prune_error
+        ) = None
         self.deploy_raises = None
         self.destroys, self.destroy_result, self.destroy_raises = [], None, None
         self.destroy_message = "앱 디렉터리를 지우는 중"
@@ -84,10 +102,19 @@ def make_deployer(parts, *, runner=True, kinds=("aws-always-on", "onprem"), dns=
         def deploy(self, env, spec, image_tag, secrets, log, *, set_name):
             parts.order.append("deploy")
             parts.deploys.append((env, image_tag, dict(secrets), set_name))
-            log(LogEvent(step=3, total=8, name="앱 시작", message=f"시작 {USER_SECRET if secrets else ''}".strip()))
+            log(
+                LogEvent(
+                    step=3,
+                    total=8,
+                    name="앱 시작",
+                    message=f"시작 {USER_SECRET if secrets else ''}".strip(),
+                )
+            )
             if parts.deploy_raises:
                 raise parts.deploy_raises
-            return parts.deploy_result or DeployResult(ok=True, url=URL, image_tag=image_tag, details={"database": "app_todo"})
+            return parts.deploy_result or DeployResult(
+                ok=True, url=URL, image_tag=image_tag, details={"database": "app_todo"}
+            )
 
         def destroy(self, env, app, log):
             parts.order.append("destroy")
@@ -113,10 +140,20 @@ def make_deployer(parts, *, runner=True, kinds=("aws-always-on", "onprem"), dns=
     return Deployer(adapters, Builder(), dns=dns, **kwargs)
 
 
-def run(parts=None, env=ENV, spec=None, sha=SHA, secrets=None, set_name="aws-always-on", **deployer_options):
+def run(
+    parts=None,
+    env=ENV,
+    spec=None,
+    sha=SHA,
+    secrets=None,
+    set_name="aws-always-on",
+    **deployer_options,
+):
     parts = parts or Parts()
     log = Log()
-    result = make_deployer(parts, **deployer_options).deploy(env, spec or GENERATED, SRC, sha, secrets or {}, log, set_name=set_name)
+    result = make_deployer(parts, **deployer_options).deploy(
+        env, spec or GENERATED, SRC, sha, secrets or {}, log, set_name=set_name
+    )
     return result, parts, log
 
 
@@ -154,7 +191,9 @@ def test_the_stages_are_numbered_continuously_and_inner_numbers_stay_in_the_mess
     assert {total for _, total, _ in steps} == {5}
     names = list(dict.fromkeys(name for _, _, name in steps))
     assert names == ["이미지 빌드", "공용 기반 확인", "연결 확인", "배포", "정리"]
-    assert [step for step, _, _ in steps] == sorted(step for step, _, _ in steps)  # 거꾸로 가지 않는다
+    assert [step for step, _, _ in steps] == sorted(
+        step for step, _, _ in steps
+    )  # 거꾸로 가지 않는다
     assert any(e.name == "배포" and e.message.startswith("[3/8] ") for e in log.events)
     assert any(e.name == "공용 기반 확인" and e.message.startswith("[2/2] ") for e in log.events)
 
@@ -180,23 +219,30 @@ def test_the_dockerfile_path_comes_from_the_spec_and_defaults_to_dockerfile():
 
 
 # --- 시작하기 전에 거르는 입력 오류 --------------------------------------------------------------------
-NEED_SECRET = make(env=GENERATED["env"] + [{"name": "STRIPE_KEY", "secret": True, "generate": False}])
+NEED_SECRET = make(
+    env=GENERATED["env"] + [{"name": "STRIPE_KEY", "secret": True, "generate": False}]
+)
 
 
-@pytest.mark.parametrize("kwargs, code", [
-    ({"spec": {"port": 8080}}, "invalid_spec"),
-    ({"spec": NEED_SECRET}, "missing_secret"),
-    ({"sha": "xyz"}, "invalid_image_tag"),
-    ({"spec": make(app="a" * 60)}, "invalid_spec"),
-    ({"set_name": "aws-serverless"}, "set_not_supported"),  # 이 배포자에 없는 세트
-    ({"set_name": "onprem"}, "set_not_supported"),  # aws 환경에 온프레미스 세트
-    ({"env": ONPREM_ENV}, "set_not_supported"),  # 온프레미스 환경에 aws 세트
-    ({"set_name": "no-such-set"}, "set_not_supported"),
-])
+@pytest.mark.parametrize(
+    "kwargs, code",
+    [
+        ({"spec": {"port": 8080}}, "invalid_spec"),
+        ({"spec": NEED_SECRET}, "missing_secret"),
+        ({"sha": "xyz"}, "invalid_image_tag"),
+        ({"spec": make(app="a" * 60)}, "invalid_spec"),
+        ({"set_name": "aws-serverless"}, "set_not_supported"),  # 이 배포자에 없는 세트
+        ({"set_name": "onprem"}, "set_not_supported"),  # aws 환경에 온프레미스 세트
+        ({"env": ONPREM_ENV}, "set_not_supported"),  # 온프레미스 환경에 aws 세트
+        ({"set_name": "no-such-set"}, "set_not_supported"),
+    ],
+)
 def test_input_errors_are_found_before_anything_starts(kwargs, code):
     result, parts, log = run(**kwargs)
     assert not result.ok and result.error.code == code and result.details["stage"] == "spec"
-    assert parts.order == [] and not any(e.step for e in log.events)  # 빌드도 기반 생성도 시작하지 않았다
+    assert parts.order == [] and not any(
+        e.step for e in log.events
+    )  # 빌드도 기반 생성도 시작하지 않았다
 
 
 def test_a_user_secret_that_is_provided_passes_the_check():
@@ -211,7 +257,9 @@ def test_an_invalid_sha_is_not_echoed_back_as_the_image_tag():
 
 # --- 단계별 실패 --------------------------------------------------------------------------------
 def build_fails(parts):
-    parts.build_error = BuildError(err("docker_build_failed", "이미지 빌드가 실패했습니다."), tail="pip failed")
+    parts.build_error = BuildError(
+        err("docker_build_failed", "이미지 빌드가 실패했습니다."), tail="pip failed"
+    )
 
 
 def foundation_fails(parts):
@@ -219,19 +267,26 @@ def foundation_fails(parts):
 
 
 def check_fails(parts):
-    parts.check_result = CheckResult(ok=False, error=err("ssh_unreachable", "서버에 접속할 수 없습니다.", retryable=True))
+    parts.check_result = CheckResult(
+        ok=False, error=err("ssh_unreachable", "서버에 접속할 수 없습니다.", retryable=True)
+    )
 
 
 def deploy_fails(parts):
-    parts.deploy_result = DeployResult(ok=False, error=err("healthcheck_failed", "헬스체크 실패"), details={"stderr": "last lines"})
+    parts.deploy_result = DeployResult(
+        ok=False, error=err("healthcheck_failed", "헬스체크 실패"), details={"stderr": "last lines"}
+    )
 
 
-@pytest.mark.parametrize("setup, stage, code, ran", [
-    (build_fails, "build", "docker_build_failed", ["build"]),
-    (foundation_fails, "foundation", "access_denied", ["build", "read"]),
-    (check_fails, "check", "ssh_unreachable", ["build", "read", "check"]),
-    (deploy_fails, "deploy", "healthcheck_failed", ["build", "read", "check", "deploy"]),
-])
+@pytest.mark.parametrize(
+    "setup, stage, code, ran",
+    [
+        (build_fails, "build", "docker_build_failed", ["build"]),
+        (foundation_fails, "foundation", "access_denied", ["build", "read"]),
+        (check_fails, "check", "ssh_unreachable", ["build", "read", "check"]),
+        (deploy_fails, "deploy", "healthcheck_failed", ["build", "read", "check", "deploy"]),
+    ],
+)
 def test_a_failure_stops_at_that_stage_and_names_it(setup, stage, code, ran):
     parts = Parts()
     setup(parts)
@@ -252,16 +307,27 @@ def test_the_tail_of_a_failed_build_and_the_adapters_details_are_kept():
 
 def test_a_failed_foundation_apply_is_reported_as_the_foundation_stage():
     parts = Parts()
-    parts.runner_reads = [MISSING, TerraformError(err("terraform_read_after_apply", "다시 읽지 못했습니다."))]
+    parts.runner_reads = [
+        MISSING,
+        TerraformError(err("terraform_read_after_apply", "다시 읽지 못했습니다.")),
+    ]
     result, parts, _ = run(parts)
-    assert result.details["stage"] == "foundation" and parts.order == ["build", "read", "apply", "read"]
+    assert result.details["stage"] == "foundation" and parts.order == [
+        "build",
+        "read",
+        "apply",
+        "read",
+    ]
 
 
 def test_an_unexpected_exception_becomes_a_pipeline_error_without_echoing_its_text():
     parts = Parts()
     parts.deploy_raises = RuntimeError(f"connection string password=hunter2 {USER_SECRET}")
     result, _, log = run(parts, secrets={"K": USER_SECRET})
-    assert result.error.code == "deploy_pipeline_error" and result.details == {"exception": "RuntimeError", "stage": "deploy"}
+    assert result.error.code == "deploy_pipeline_error" and result.details == {
+        "exception": "RuntimeError",
+        "stage": "deploy",
+    }
     assert "hunter2" not in result.model_dump_json() and "hunter2" not in log.text()
 
 
@@ -277,8 +343,11 @@ def test_a_failed_cleanup_never_fails_the_deploy_but_leaves_a_warning():
 # --- 비밀 ---------------------------------------------------------------------------------------
 def test_user_secrets_are_masked_in_forwarded_logs_and_in_result_details():
     parts = Parts()
-    parts.deploy_result = DeployResult(ok=False, error=err("healthcheck_failed", f"실패 {USER_SECRET}"),
-                                       details={"stderr": f"echo {USER_SECRET}"})
+    parts.deploy_result = DeployResult(
+        ok=False,
+        error=err("healthcheck_failed", f"실패 {USER_SECRET}"),
+        details={"stderr": f"echo {USER_SECRET}"},
+    )
     result, _, log = run(parts, secrets={"K": USER_SECRET})
     assert USER_SECRET not in log.text() and USER_SECRET not in result.model_dump_json()
     assert "***" in log.text() and "***" in result.details["stderr"]
@@ -286,9 +355,15 @@ def test_user_secrets_are_masked_in_forwarded_logs_and_in_result_details():
 
 def test_a_secret_inside_a_successful_adapter_result_is_masked_too():
     parts = Parts()
-    parts.deploy_result = DeployResult(ok=True, url=URL, image_tag=SHA, details={"warnings": [f"사용한 값 {USER_SECRET}"]})
+    parts.deploy_result = DeployResult(
+        ok=True, url=URL, image_tag=SHA, details={"warnings": [f"사용한 값 {USER_SECRET}"]}
+    )
     result, _, _ = run(parts, secrets={"K": USER_SECRET})
-    assert result.ok and USER_SECRET not in result.model_dump_json() and "***" in result.details["warnings"][0]
+    assert (
+        result.ok
+        and USER_SECRET not in result.model_dump_json()
+        and "***" in result.details["warnings"][0]
+    )
 
 
 def test_a_successful_result_is_json_serializable_and_holds_no_secret():
@@ -308,7 +383,13 @@ class FakeDns:
     """WildcardRecords(scope="aws")를 흉내 낸다."""
 
     def __init__(self, parts, changed=True, error=None, raises=None):
-        self.parts, self.changed, self.error, self.raises, self.calls = parts, changed, error, raises, []
+        self.parts, self.changed, self.error, self.raises, self.calls = (
+            parts,
+            changed,
+            error,
+            raises,
+            [],
+        )
 
     def name_for(self, env_id):
         return f"*.{env_id}.aws.anyship.cloud"
@@ -328,7 +409,9 @@ def test_the_dns_record_is_set_after_the_foundation_is_read_and_before_the_conne
     dns = FakeDns(parts)
     result, parts, _ = run(parts, dns=dns)
     assert result.ok and parts.order == ["build", "read", "dns", "check", "deploy", "prune"]
-    assert dns.calls == [("test", "43.201.158.8")]  # 서비스에 저장된 낡은 호스트(1.1.1.1)가 아니라 방금 읽은 값
+    assert dns.calls == [
+        ("test", "43.201.158.8")
+    ]  # 서비스에 저장된 낡은 호스트(1.1.1.1)가 아니라 방금 읽은 값
 
 
 def test_after_a_foundation_is_created_the_dns_record_points_at_the_new_host():
@@ -336,7 +419,16 @@ def test_after_a_foundation_is_created_the_dns_record_points_at_the_new_host():
     parts.runner_reads = [MISSING, "ok"]
     dns = FakeDns(parts)
     result, parts, _ = run(parts, dns=dns)
-    assert result.ok and parts.order == ["build", "read", "apply", "read", "dns", "check", "deploy", "prune"]
+    assert result.ok and parts.order == [
+        "build",
+        "read",
+        "apply",
+        "read",
+        "dns",
+        "check",
+        "deploy",
+        "prune",
+    ]
 
 
 def test_the_dns_step_is_logged_inside_the_foundation_stage_and_stage_numbering_is_unchanged():
@@ -365,11 +457,22 @@ def test_the_result_tells_what_the_dns_step_did_and_says_nothing_when_there_is_n
 
 def test_a_failed_dns_update_stops_the_deploy_at_the_foundation_stage_with_its_own_code():
     parts = Parts()
-    dns = FakeDns(parts, error=err("dns_change_failed", "DNS 레코드를 바꾸지 못했습니다.", hint="권한을 확인해 주세요.",
-                                   retryable=False))
+    dns = FakeDns(
+        parts,
+        error=err(
+            "dns_change_failed",
+            "DNS 레코드를 바꾸지 못했습니다.",
+            hint="권한을 확인해 주세요.",
+            retryable=False,
+        ),
+    )
     result, parts, log = run(parts, dns=dns)
     assert not result.ok and result.details["stage"] == "foundation"
-    assert (result.error.code, result.error.retryable, result.error.hint) == ("dns_change_failed", False, "권한을 확인해 주세요.")
+    assert (result.error.code, result.error.retryable, result.error.hint) == (
+        "dns_change_failed",
+        False,
+        "권한을 확인해 주세요.",
+    )
     assert parts.order == ["build", "read", "dns"]  # 연결 확인, 배포, 정리를 하지 않는다
     assert any(e.level == "error" for e in log.events)
 
@@ -377,7 +480,10 @@ def test_a_failed_dns_update_stops_the_deploy_at_the_foundation_stage_with_its_o
 def test_an_unexpected_dns_exception_becomes_a_foundation_stage_error_without_its_text():
     parts = Parts()
     result, _, _ = run(parts, dns=FakeDns(parts, raises=RuntimeError(f"leaked {USER_SECRET}")))
-    assert result.error.code == "deploy_pipeline_error" and result.details == {"stage": "foundation", "exception": "RuntimeError"}
+    assert result.error.code == "deploy_pipeline_error" and result.details == {
+        "stage": "foundation",
+        "exception": "RuntimeError",
+    }
     assert USER_SECRET not in result.model_dump_json()
 
 
@@ -425,11 +531,20 @@ def test_destroy_logs_are_one_stage_with_the_adapters_own_numbering_kept_in_the_
 
 def test_a_failed_destroy_is_passed_on_unchanged_and_logged_as_an_error():
     parts = Parts()
-    parts.destroy_result = DestroyResult(ok=False, error=err("destroy_failed", "컨테이너를 지우지 못했습니다.",
-                                                             hint="docker compose down을 확인해 주세요."),
-                                         details={"stderr": "boom"})
+    parts.destroy_result = DestroyResult(
+        ok=False,
+        error=err(
+            "destroy_failed",
+            "컨테이너를 지우지 못했습니다.",
+            hint="docker compose down을 확인해 주세요.",
+        ),
+        details={"stderr": "boom"},
+    )
     result, _, log = destroy(parts)
-    assert not result.ok and (result.error.code, result.error.hint) == ("destroy_failed", "docker compose down을 확인해 주세요.")
+    assert not result.ok and (result.error.code, result.error.hint) == (
+        "destroy_failed",
+        "docker compose down을 확인해 주세요.",
+    )
     assert result.details == {"stderr": "boom"}
     assert any(e.level == "error" and "지우지 못했습니다" in e.message for e in log.events)
 
@@ -440,11 +555,17 @@ def test_an_unexpected_exception_in_destroy_is_reported_without_its_text():
     result, _, log = destroy(parts)
     assert result.error.code == "destroy_pipeline_error" and result.error.retryable
     assert result.details == {"exception": "RuntimeError"}
-    assert USER_SECRET not in result.model_dump_json() and all(USER_SECRET not in e.message for e in log.events)
+    assert USER_SECRET not in result.model_dump_json() and all(
+        USER_SECRET not in e.message for e in log.events
+    )
 
 
-@pytest.mark.parametrize("env, set_name", [(ENV, "onprem"), (ONPREM_ENV, "aws-always-on"), (ENV, "nope")])
-def test_destroy_refuses_a_set_that_does_not_fit_the_environment_and_never_calls_the_adapter(env, set_name):
+@pytest.mark.parametrize(
+    "env, set_name", [(ENV, "onprem"), (ONPREM_ENV, "aws-always-on"), (ENV, "nope")]
+)
+def test_destroy_refuses_a_set_that_does_not_fit_the_environment_and_never_calls_the_adapter(
+    env, set_name
+):
     result, parts, _ = destroy(env=env, set_name=set_name)
     assert not result.ok and result.error.code == "set_not_supported" and parts.destroys == []
 
@@ -456,7 +577,9 @@ def test_an_onprem_environment_can_be_destroyed_through_its_own_set():
 
 def test_secret_looking_values_in_the_adapters_destroy_logs_are_masked():
     parts = Parts()
-    token = "gh" + "p_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"  # 비밀 스캐너가 진짜로 오해하지 않게 이어 붙인다
+    token = (
+        "gh" + "p_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
+    )  # 비밀 스캐너가 진짜로 오해하지 않게 이어 붙인다
     parts.destroy_message = f"ssh 출력: token={token}"
     _, _, log = destroy(parts)
     assert token not in " ".join(e.message for e in log.events) and "***" in log.events[0].message
@@ -492,10 +615,19 @@ def test_the_check_logs_are_one_stage_with_the_adapters_numbering_kept_in_the_me
 
 def test_a_failed_check_is_passed_on_unchanged_with_its_hint_and_logged_as_an_error():
     parts = Parts()
-    parts.check_result = CheckResult(ok=False, error=err("docker_missing", "서버에 Docker가 없습니다.",
-                                                        hint="서버 준비 스크립트를 실행해 주세요."))
+    parts.check_result = CheckResult(
+        ok=False,
+        error=err(
+            "docker_missing",
+            "서버에 Docker가 없습니다.",
+            hint="서버 준비 스크립트를 실행해 주세요.",
+        ),
+    )
     result, _, log = check(parts)
-    assert not result.ok and (result.error.code, result.error.hint) == ("docker_missing", "서버 준비 스크립트를 실행해 주세요.")
+    assert not result.ok and (result.error.code, result.error.hint) == (
+        "docker_missing",
+        "서버 준비 스크립트를 실행해 주세요.",
+    )
     assert any(e.level == "error" and "Docker가 없습니다" in e.message for e in log.events)
 
 
@@ -505,11 +637,17 @@ def test_an_unexpected_exception_in_a_check_is_reported_without_its_text():
     result, _, log = check(parts)
     assert result.error.code == "check_pipeline_error" and result.error.retryable
     assert result.details == {"exception": "RuntimeError"}
-    assert USER_SECRET not in result.model_dump_json() and all(USER_SECRET not in e.message for e in log.events)
+    assert USER_SECRET not in result.model_dump_json() and all(
+        USER_SECRET not in e.message for e in log.events
+    )
 
 
-@pytest.mark.parametrize("env, set_name", [(ONPREM_ENV, "aws-always-on"), (ENV, "onprem"), (ONPREM_ENV, "nope")])
-def test_a_check_refuses_a_set_that_does_not_fit_the_environment_and_never_calls_the_adapter(env, set_name):
+@pytest.mark.parametrize(
+    "env, set_name", [(ONPREM_ENV, "aws-always-on"), (ENV, "onprem"), (ONPREM_ENV, "nope")]
+)
+def test_a_check_refuses_a_set_that_does_not_fit_the_environment_and_never_calls_the_adapter(
+    env, set_name
+):
     result, parts, _ = check(env=env, set_name=set_name)
     assert not result.ok and result.error.code == "set_not_supported" and parts.checks == []
 
@@ -549,16 +687,30 @@ def test_the_environment_cleanup_logs_are_one_stage_with_the_adapters_numbering_
 
 def test_a_set_without_environment_level_cleanup_says_so_instead_of_pretending():
     result, parts, _ = remove_environment(env=ENV, set_name="aws-always-on")
-    assert not result.ok and result.error.code == "remove_environment_unsupported" and not result.error.retryable
+    assert (
+        not result.ok
+        and result.error.code == "remove_environment_unsupported"
+        and not result.error.retryable
+    )
     assert parts.cleanups == [] and parts.destroys == []
 
 
 def test_a_failed_environment_cleanup_is_passed_on_unchanged_and_logged_as_an_error():
     parts = Parts()
-    parts.cleanup_result = DestroyResult(ok=False, error=err("dns_change_failed", "DNS 레코드를 바꾸지 못했습니다.",
-                                                             hint="권한을 확인해 주세요.", retryable=True))
+    parts.cleanup_result = DestroyResult(
+        ok=False,
+        error=err(
+            "dns_change_failed",
+            "DNS 레코드를 바꾸지 못했습니다.",
+            hint="권한을 확인해 주세요.",
+            retryable=True,
+        ),
+    )
     result, _, log = remove_environment(parts)
-    assert not result.ok and (result.error.code, result.error.retryable) == ("dns_change_failed", True)
+    assert not result.ok and (result.error.code, result.error.retryable) == (
+        "dns_change_failed",
+        True,
+    )
     assert any(e.level == "error" for e in log.events)
 
 
@@ -566,11 +718,15 @@ def test_an_unexpected_exception_in_an_environment_cleanup_is_reported_without_i
     parts = Parts()
     parts.cleanup_raises = RuntimeError(f"leaked {USER_SECRET}")
     result, _, _ = remove_environment(parts)
-    assert result.error.code == "remove_environment_pipeline_error" and result.details == {"exception": "RuntimeError"}
+    assert result.error.code == "remove_environment_pipeline_error" and result.details == {
+        "exception": "RuntimeError"
+    }
     assert USER_SECRET not in result.model_dump_json()
 
 
-@pytest.mark.parametrize("env, set_name", [(ONPREM_ENV, "aws-always-on"), (ENV, "onprem"), (ONPREM_ENV, "nope")])
+@pytest.mark.parametrize(
+    "env, set_name", [(ONPREM_ENV, "aws-always-on"), (ENV, "onprem"), (ONPREM_ENV, "nope")]
+)
 def test_an_environment_cleanup_refuses_a_set_that_does_not_fit_the_environment(env, set_name):
     result, parts, _ = remove_environment(env=env, set_name=set_name)
     assert not result.ok and result.error.code == "set_not_supported" and parts.cleanups == []

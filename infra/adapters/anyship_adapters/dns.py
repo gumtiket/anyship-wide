@@ -7,6 +7,7 @@
 boto3는 선택 의존성이라 처음 쓸 때 불러온다(이 모듈만 불러서는 boto3가 없어도 문제없다).
 AWS 자격 증명은 서비스 서버의 인스턴스 역할이 제공한다. 이 모듈은 비밀을 다루지 않는다.
 """
+
 import ipaddress
 import re
 from typing import Any
@@ -14,7 +15,10 @@ from typing import Any
 from .models import ENV_ID_PATTERN, AdapterError
 
 _ENV_ID = re.compile(ENV_ID_PATTERN)
-SCOPES = ("onprem", "aws")  # 서비스 서버 역할의 Route 53 정책(infra/service-account/dns.tf)이 허용하는 이름 범위와 같아야 한다
+SCOPES = (
+    "onprem",
+    "aws",
+)  # 서비스 서버 역할의 Route 53 정책(infra/service-account/dns.tf)이 허용하는 이름 범위와 같아야 한다
 
 
 class DnsError(Exception):
@@ -30,7 +34,14 @@ def _fail(code: str, message: str, hint: str | None = None, retryable: bool = Fa
 
 
 class WildcardRecords:
-    def __init__(self, client: Any = None, *, base_domain: str = "anyship.cloud", ttl: int = 60, scope: str = "onprem"):
+    def __init__(
+        self,
+        client: Any = None,
+        *,
+        base_domain: str = "anyship.cloud",
+        ttl: int = 60,
+        scope: str = "onprem",
+    ):
         if scope not in SCOPES:
             raise ValueError("scope must be one of " + ", ".join(SCOPES))
         self._client = client  # 시험에서는 가짜 클라이언트를 끼워 넣는다
@@ -47,10 +58,18 @@ class WildcardRecords:
         self._check_env(env_id)
         self._check_ip(ip)
         current = self._current(env_id)
-        if current and [r["Value"] for r in current.get("ResourceRecords", [])] == [ip] \
-                and current.get("TTL") == self._ttl:
+        if (
+            current
+            and [r["Value"] for r in current.get("ResourceRecords", [])] == [ip]
+            and current.get("TTL") == self._ttl
+        ):
             return False
-        record = {"Name": self.name_for(env_id), "Type": "A", "TTL": self._ttl, "ResourceRecords": [{"Value": ip}]}
+        record = {
+            "Name": self.name_for(env_id),
+            "Type": "A",
+            "TTL": self._ttl,
+            "ResourceRecords": [{"Value": ip}],
+        }
         self._change("UPSERT", record)
         return True
 
@@ -74,45 +93,75 @@ class WildcardRecords:
         except ValueError:
             address = None
         if address is None or address.version != 4 or not address.is_global:
-            raise _fail("invalid_dns_input", "공인 IPv4 주소만 DNS에 등록할 수 있습니다.",
-                        hint="서버의 공개 IP를 확인해 주세요(사설 주소나 루프백은 사용할 수 없습니다).")
+            raise _fail(
+                "invalid_dns_input",
+                "공인 IPv4 주소만 DNS에 등록할 수 있습니다.",
+                hint="서버의 공개 IP를 확인해 주세요(사설 주소나 루프백은 사용할 수 없습니다).",
+            )
 
     def _api(self) -> Any:
         if self._client is None:
             try:
                 import boto3
             except ImportError:
-                raise _fail("dns_unavailable", "boto3가 설치되어 있지 않아 DNS 레코드를 바꿀 수 없습니다.",
-                            hint="서비스 서버에서 `pip install \"anyship-adapters[aws]\"`로 설치해 주세요.") from None
+                raise _fail(
+                    "dns_unavailable",
+                    "boto3가 설치되어 있지 않아 DNS 레코드를 바꿀 수 없습니다.",
+                    hint='서비스 서버에서 `pip install "anyship-adapters[aws]"`로 설치해 주세요.',
+                ) from None
             self._client = boto3.client("route53")
         return self._client
 
     def _zone_id(self) -> str:
         if self._zone is None:
-            found = self._call(lambda api: api.list_hosted_zones_by_name(DNSName=f"{self._domain}.", MaxItems="1"))
-            zones = [z for z in found.get("HostedZones", [])
-                     if z["Name"] == f"{self._domain}." and not z.get("Config", {}).get("PrivateZone")]
+            found = self._call(
+                lambda api: api.list_hosted_zones_by_name(DNSName=f"{self._domain}.", MaxItems="1")
+            )
+            zones = [
+                z
+                for z in found.get("HostedZones", [])
+                if z["Name"] == f"{self._domain}." and not z.get("Config", {}).get("PrivateZone")
+            ]
             if not zones:
-                raise _fail("dns_zone_not_found", f"{self._domain}의 호스팅 영역을 찾을 수 없습니다.",
-                            hint="Route 53에 이 도메인의 공개 호스팅 영역이 있는지 확인해 주세요.")
+                raise _fail(
+                    "dns_zone_not_found",
+                    f"{self._domain}의 호스팅 영역을 찾을 수 없습니다.",
+                    hint="Route 53에 이 도메인의 공개 호스팅 영역이 있는지 확인해 주세요.",
+                )
             self._zone = zones[0]["Id"].rsplit("/", 1)[-1]
         return self._zone
 
     def _current(self, env_id: str) -> dict | None:
         # Route 53은 와일드카드(*)를 \052로 돌려준다.
         wanted = f"\\052.{env_id}.{self._scope}.{self._domain}."
-        found = self._call(lambda api: api.list_resource_record_sets(
-            HostedZoneId=self._zone_id(), StartRecordName=wanted, StartRecordType="A", MaxItems="1"))
+        found = self._call(
+            lambda api: api.list_resource_record_sets(
+                HostedZoneId=self._zone_id(),
+                StartRecordName=wanted,
+                StartRecordType="A",
+                MaxItems="1",
+            )
+        )
         for record in found.get("ResourceRecordSets", []):
             if record["Name"] == wanted and record["Type"] == "A":
                 return record
         return None
 
     def _change(self, action: str, record: dict) -> None:
-        batch = {"Comment": "managed by anyship adapter", "Changes": [{"Action": action, "ResourceRecordSet": record}]}
-        change = self._call(lambda api: api.change_resource_record_sets(HostedZoneId=self._zone_id(), ChangeBatch=batch))
-        self._call(lambda api: api.get_waiter("resource_record_sets_changed").wait(
-            Id=change["ChangeInfo"]["Id"], WaiterConfig={"Delay": 5, "MaxAttempts": 24}))
+        batch = {
+            "Comment": "managed by anyship adapter",
+            "Changes": [{"Action": action, "ResourceRecordSet": record}],
+        }
+        change = self._call(
+            lambda api: api.change_resource_record_sets(
+                HostedZoneId=self._zone_id(), ChangeBatch=batch
+            )
+        )
+        self._call(
+            lambda api: api.get_waiter("resource_record_sets_changed").wait(
+                Id=change["ChangeInfo"]["Id"], WaiterConfig={"Delay": 5, "MaxAttempts": 24}
+            )
+        )
 
     def _call(self, call):
         try:
@@ -122,7 +171,13 @@ class WildcardRecords:
         except Exception as exc:  # botocore의 ClientError, 시간 초과, 자격 증명 없음 등
             code = getattr(exc, "response", {}).get("Error", {}).get("Code", type(exc).__name__)
             denied = code in ("AccessDenied", "AccessDeniedException")
-            raise _fail("dns_change_failed", "DNS 레코드를 바꾸지 못했습니다.",
-                        hint=("서비스 서버 역할의 Route 53 권한을 확인해 주세요." if denied
-                              else "잠시 후 다시 시도해 주세요."),
-                        retryable=not denied) from None
+            raise _fail(
+                "dns_change_failed",
+                "DNS 레코드를 바꾸지 못했습니다.",
+                hint=(
+                    "서비스 서버 역할의 Route 53 권한을 확인해 주세요."
+                    if denied
+                    else "잠시 후 다시 시도해 주세요."
+                ),
+                retryable=not denied,
+            ) from None

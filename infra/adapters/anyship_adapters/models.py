@@ -7,13 +7,17 @@
   * 로그 이벤트는 구조화된 데이터를 담을 수 있지만, 비밀을 걸러내는 일은
     어댑터의 몫이다(redact.py 참고).
 """
+
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Annotated, Any, Literal, Mapping, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 ENV_ID_PATTERN = r"^[a-z][a-z0-9-]{1,20}$"
-APP_NAME_PATTERN = r"^[a-z][a-z0-9-]{2,62}$"  # DNS 라벨, Compose 프로젝트 이름, Lambda 이름으로 쓰인다
+APP_NAME_PATTERN = (
+    r"^[a-z][a-z0-9-]{2,62}$"  # DNS 라벨, Compose 프로젝트 이름, Lambda 이름으로 쓰인다
+)
 IMAGE_TAG_PATTERN = r"^[0-9a-f]{7,40}$"  # 커밋 SHA
 
 
@@ -34,19 +38,25 @@ class AwsEnvironment(AdapterModel):
     # 사용자 계정 공용 기반(infra/user-account)의 출력값. 서비스가 기반을 만든 뒤 저장해 두었다가
     # 넘겨 준다. 기반이 아직 없으면 비어 있고, 이 경우 check와 deploy는 `foundation_missing`으로 실패한다.
     # 비밀이 아니다(주소와 비밀의 ARN뿐이며, 비밀번호 자체는 Secrets Manager에만 있다).
-    host: str | None = Field(default=None, pattern=r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$")
+    host: str | None = Field(
+        default=None, pattern=r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$"
+    )
     ssh_user: str = Field(default="deploy", pattern=r"^[a-z_][a-z0-9_-]{0,31}$")
     ssh_port: int = Field(default=22, ge=1, le=65535)
     # RDS 주소는 psql 접속 문자열에 들어가므로, 임의의 호스트가 끼어들지 못하게 RDS 도메인만 허용한다.
-    db_address: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}(\.[a-z0-9-]{1,63})*\.rds\.amazonaws\.com$")
+    db_address: str | None = Field(
+        default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}(\.[a-z0-9-]{1,63})*\.rds\.amazonaws\.com$"
+    )
     db_port: int = Field(default=5432, ge=1024, le=65535)
     # RDS가 관리하는 비밀의 이름은 `rds!db-<UUID>`라서 `!`를 허용해야 한다.
     db_secret_arn: str | None = Field(
-        default=None, pattern=r"^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[\w+=,.@!/-]+$")
+        default=None, pattern=r"^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[\w+=,.@!/-]+$"
+    )
     # Terraform state 버킷(온보딩 스택 출력 StateBucketName). 이름은 계산할 수 없어서 서비스가 스택 출력에서 읽어 저장한다.
     # 템플릿이 짓는 모양(anyship-tfstate-<계정ID>-<리전>-<스택ID 앞 8자>)만 받는다. terraform init의 인자로 들어가는 값이다.
     state_bucket: str | None = Field(
-        default=None, pattern=r"^anyship-tfstate-[0-9]{12}-[a-z]{2}(-[a-z]+)+-[0-9]-[0-9a-f]{8}$")
+        default=None, pattern=r"^anyship-tfstate-[0-9]{12}-[a-z]{2}(-[a-z]+)+-[0-9]-[0-9a-f]{8}$"
+    )
 
     @model_validator(mode="after")
     def foundation_belongs_to_the_role_account(self):
@@ -69,7 +79,7 @@ class OnpremEnvironment(AdapterModel):
     ssh_port: int = Field(default=22, ge=1, le=65535)
 
 
-Environment = Annotated[Union[AwsEnvironment, OnpremEnvironment], Field(discriminator="kind")]
+Environment = Annotated[AwsEnvironment | OnpremEnvironment, Field(discriminator="kind")]
 
 # AI 쪽이 만든 배포 명세. 어댑터는 이 값을 믿지 않는다. 자신이 사용하는 모든
 # 필드(이름, 명령, 크기)를 직접 다시 검증한다.

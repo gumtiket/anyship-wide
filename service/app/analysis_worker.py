@@ -1,11 +1,12 @@
 """Private subprocess entry point. No application imports or Docker gate execution."""
+
 import json
 import sys
 from pathlib import Path
 
+from .analyses import make_diff
 from .analysis_contract import ProposalFile, WorkerResult
 from .analysis_source import blob_sha
-from .analyses import make_diff
 
 
 def analyze(repo, output, request, log):
@@ -18,14 +19,21 @@ def analyze(repo, output, request, log):
     client = None
     if mode == "fake":
         from ai.llm.fake import FakeLLMClient, recommendation_response
-        client = FakeLLMClient({"diagnose": ['{"explanations":[],"candidates":[]}'],
-                               "transform": ['{"diff":"","violation_ids":[]}'] * 30,
-                               "recommend": [recommendation_response]})
+
+        client = FakeLLMClient(
+            {
+                "diagnose": ['{"explanations":[],"candidates":[]}'],
+                "transform": ['{"diff":"","violation_ids":[]}'] * 30,
+                "recommend": [recommendation_response],
+            }
+        )
     elif mode == "bedrock":
         from ai.llm.bedrock import BedrockClient
+
         client = BedrockClient(schema_retries=1, transport_attempts=2)
     elif mode == "anthropic":
         from ai.llm.anthropic import AnthropicClient
+
         client = AnthropicClient(schema_retries=1, transport_attempts=2)
 
     # Bound total logical model calls as well as process wall time. Each client has
@@ -38,15 +46,24 @@ def analyze(repo, output, request, log):
             calls += 1
             if calls > request["max_calls"]:
                 from ai.llm.base import LLMError
+
                 raise LLMError("모델 호출 상한을 초과했습니다.", transport_attempts=0)
             return original_complete(*args, **kwargs)
 
         client.complete = limited
 
-    result = run_analysis(repo, out_dir=output, target_env=request["target_env"],
-                          commit=request["base_sha"], source_repo=request["source_repo"],
-                          app_name=request["app_name"], llm=client, decision_llm=client,
-                          no_gate=True, log=log)
+    result = run_analysis(
+        repo,
+        out_dir=output,
+        target_env=request["target_env"],
+        commit=request["base_sha"],
+        source_repo=request["source_repo"],
+        app_name=request["app_name"],
+        llm=client,
+        decision_llm=client,
+        no_gate=True,
+        log=log,
+    )
     try:
         report = result.model_dump(mode="json", exclude={"output_files", "build_context"})
         report["provider"] = mode
@@ -55,11 +72,17 @@ def analyze(repo, output, request, log):
         report["adapter_compatible"] = False
         if result.deploy_spec is not None:
             from anyship_adapters.spec import SpecError, parse_spec
+
             try:
                 parse_spec(result.deploy_spec.model_dump(mode="json", exclude_none=True))
                 report["adapter_compatible"] = True
             except SpecError:
-                report["packaging_warnings"].append({"code": "adapter_spec_rejected", "message": "배포 어댑터가 생성 명세를 수용하지 않았습니다."})
+                report["packaging_warnings"].append(
+                    {
+                        "code": "adapter_spec_rejected",
+                        "message": "배포 어댑터가 생성 명세를 수용하지 않았습니다.",
+                    }
+                )
         files = []
         if result.status != "failed" and result.transformation.patch_valid:
             view = RepoView(repo)
@@ -82,8 +105,13 @@ def analyze(repo, output, request, log):
                     continue
                 if masker.contains_sensitive(content):
                     raise ValueError("sensitive_proposal")
-                files.append(ProposalFile(path=name, content=content,
-                             before_sha=blob_sha(original[name]) if name in original else None))
+                files.append(
+                    ProposalFile(
+                        path=name,
+                        content=content,
+                        before_sha=blob_sha(original[name]) if name in original else None,
+                    )
+                )
         return WorkerResult(base_sha=request["base_sha"], report=report, files=files)
     finally:
         if result.build_context is not None:

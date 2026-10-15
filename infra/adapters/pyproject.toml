@@ -20,3 +20,6 @@ include = ["anyship_adapters", "anyship_adapters.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+extend = "../../ruff.toml"

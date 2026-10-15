@@ -10,6 +10,7 @@
 주의: psql 오류 출력에는 실패한 문장이 그대로 실릴 수 있어서 비밀번호가 섞일 수 있다.
 호출하는 쪽은 두 비밀번호를 redact 대상에 등록한 뒤에 출력을 쓴다.
 """
+
 import re
 
 from .compose import POSTGRES_IMAGE
@@ -59,19 +60,36 @@ GRANT CONNECT ON DATABASE {name} TO {name};
 
 
 # 첫 줄에서 마스터 비밀번호를 읽고(표준입력), 나머지 입력은 psql이 SQL로 읽는다.
-_REMOTE = ('IFS= read -r PGPASSWORD || exit 1; export PGPASSWORD; '
-           'exec docker run --rm -i -e PGPASSWORD "$1" psql -v ON_ERROR_STOP=1 -X -q '
-           '"host=$2 port=$3 user=$4 dbname=postgres sslmode=require connect_timeout=10"')
+_REMOTE = (
+    "IFS= read -r PGPASSWORD || exit 1; export PGPASSWORD; "
+    'exec docker run --rm -i -e PGPASSWORD "$1" psql -v ON_ERROR_STOP=1 -X -q '
+    '"host=$2 port=$3 user=$4 dbname=postgres sslmode=require connect_timeout=10"'
+)
 
 
-def ensure_app_database(ssh: SshRunner, env: AwsEnvironment, app: str, *,
-                        master_password: str, app_password: str, timeout: float = 180) -> CommandResult:
+def ensure_app_database(
+    ssh: SshRunner,
+    env: AwsEnvironment,
+    app: str,
+    *,
+    master_password: str,
+    app_password: str,
+    timeout: float = 180,
+) -> CommandResult:
     """앱 전용 계정과 DB를 만들거나 비밀번호를 맞춘다. 실패는 예외가 아니라 결과로 알린다."""
     name = db_name(app)
-    if not _PASSWORD.match(app_password) or not master_password or "\n" in master_password or "\r" in master_password:
+    if (
+        not _PASSWORD.match(app_password)
+        or not master_password
+        or "\n" in master_password
+        or "\r" in master_password
+    ):
         raise ValueError("invalid database password")
     if env.db_address is None:
         raise ValueError("database address is missing")
     stdin = f"{master_password}\n{_sql(name, app_password)}"
-    return ssh.run(["sh", "-c", _REMOTE, "sh", POSTGRES_IMAGE, env.db_address, str(env.db_port), MASTER_USER],
-                   input=stdin, timeout=timeout)
+    return ssh.run(
+        ["sh", "-c", _REMOTE, "sh", POSTGRES_IMAGE, env.db_address, str(env.db_port), MASTER_USER],
+        input=stdin,
+        timeout=timeout,
+    )

@@ -10,15 +10,17 @@
 `LocalFolderSource`의 커밋 SHA는 파일 내용으로 정한다. 사용자가 둔 폴더에서 `git`을 실행하지 않는다(그 폴더의 `.git/config`가 명령을 실행하게
 만들 수 있고, 커밋하지 않은 수정이 있으면 HEAD가 실제 내용을 말해 주지 못한다). 이미지 빌더가 복사하지 않는 파일(`.git`, `.env*`)은 해시에도 넣지 않는다.
 """
+
 import hashlib
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Protocol
 
 import yaml
 
@@ -48,7 +50,9 @@ class SourceResult:
     path: Path  # 소스 폴더(읽기 전용으로 취급한다)
     commit_sha: str  # 7~40자리 16진수. 이미지 태그가 된다
     spec: Mapping[str, Any]  # deploy-spec.yaml의 내용(형식 검증은 Deployer가 한다)
-    cleanup: Callable[[], None] | None = None  # 받아 둔 임시 소스를 지운다(배포가 끝났거나 쓰지 않게 되었을 때)
+    cleanup: Callable[[], None] | None = (
+        None  # 받아 둔 임시 소스를 지운다(배포가 끝났거나 쓰지 않게 되었을 때)
+    )
 
 
 class SourceProvider(Protocol):
@@ -88,12 +92,22 @@ class GitHubCloneSource:
                 shutil.rmtree(child, ignore_errors=True)
 
     def fetch(self, full_name: str, branch: str = "", token: str | None = None) -> SourceResult:
-        if not _REPOSITORY.fullmatch(full_name) or any(part in (".", "..") for part in full_name.split("/")):
+        if not _REPOSITORY.fullmatch(full_name) or any(
+            part in (".", "..") for part in full_name.split("/")
+        ):
             raise SourceError("source_not_found", "저장소 이름이 올바르지 않습니다.")
-        if not _BRANCH.fullmatch(branch) or branch.startswith(("-", "/")) or ".." in branch or branch.endswith(("/", ".lock")):
+        if (
+            not _BRANCH.fullmatch(branch)
+            or branch.startswith(("-", "/"))
+            or ".." in branch
+            or branch.endswith(("/", ".lock"))
+        ):
             raise SourceError("source_not_found", "브랜치 이름이 올바르지 않습니다.")
         if not token:
-            raise SourceError("github_token_missing", "GitHub 인증 정보가 없어 소스를 받을 수 없습니다. 다시 로그인해 주세요.")
+            raise SourceError(
+                "github_token_missing",
+                "GitHub 인증 정보가 없어 소스를 받을 수 없습니다. 다시 로그인해 주세요.",
+            )
         self._workspace.mkdir(parents=True, exist_ok=True)
         root = Path(tempfile.mkdtemp(prefix="src-", dir=self._workspace))
         destination = root / full_name.split("/")[1]
@@ -107,12 +121,16 @@ class GitHubCloneSource:
                 revision = self._revision(destination)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
                 # git의 오류 출력은 싣지 않는다(저장소 주소와 인증 관련 정보가 섞일 수 있다).
-                raise SourceError("source_fetch_failed", "GitHub에서 소스를 받지 못했습니다.") from None
+                raise SourceError(
+                    "source_fetch_failed", "GitHub에서 소스를 받지 못했습니다."
+                ) from None
             if not isinstance(revision, str) or not _COMMIT.fullmatch(revision):
                 raise SourceError("source_fetch_failed", "받은 소스의 커밋을 확인하지 못했습니다.")
             _require_files(destination)
             _fingerprint(destination)  # 파일 수와 크기 제한을 확인한다(값은 쓰지 않는다)
-            return SourceResult(destination, revision[:12], _read_spec(destination / "deploy-spec.yaml"), cleanup)
+            return SourceResult(
+                destination, revision[:12], _read_spec(destination / "deploy-spec.yaml"), cleanup
+            )
         except BaseException:
             cleanup()
             raise
@@ -122,7 +140,9 @@ def _require_files(folder: Path) -> None:
     for required in REQUIRED_FILES:
         entry = folder / required
         if entry.is_symlink() or not entry.is_file():
-            raise SourceError("source_incomplete", f"소스 폴더의 루트에 {required} 파일이 필요합니다.")
+            raise SourceError(
+                "source_incomplete", f"소스 폴더의 루트에 {required} 파일이 필요합니다."
+            )
 
 
 def _read_spec(path: Path) -> Mapping[str, Any]:
@@ -133,7 +153,9 @@ def _read_spec(path: Path) -> Mapping[str, Any]:
     except (yaml.YAMLError, UnicodeDecodeError):
         raise SourceError("source_incomplete", "deploy-spec.yaml을 읽을 수 없습니다.") from None
     if not isinstance(spec, dict):
-        raise SourceError("source_incomplete", "deploy-spec.yaml은 항목들의 목록이 아니라 매핑이어야 합니다.")
+        raise SourceError(
+            "source_incomplete", "deploy-spec.yaml은 항목들의 목록이 아니라 매핑이어야 합니다."
+        )
     return spec
 
 
@@ -142,7 +164,9 @@ def _fingerprint(folder: Path) -> str:
     digest, total, count = hashlib.sha256(), 0, 0
     for directory, dirs, files in os.walk(folder, followlinks=False):
         dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".env"))
-        for entry in sorted(files + [d for d in dirs if os.path.islink(os.path.join(directory, d))]):
+        for entry in sorted(
+            files + [d for d in dirs if os.path.islink(os.path.join(directory, d))]
+        ):
             if entry.startswith(".env"):
                 continue
             path = os.path.join(directory, entry)
@@ -151,13 +175,17 @@ def _fingerprint(folder: Path) -> str:
             if count > MAX_ENTRIES:
                 raise SourceError("source_too_large", "소스의 파일이 너무 많습니다.")
             if os.path.islink(path):
-                digest.update(b"L\0" + relative.encode() + b"\0" + os.readlink(path).encode() + b"\0")
+                digest.update(
+                    b"L\0" + relative.encode() + b"\0" + os.readlink(path).encode() + b"\0"
+                )
                 continue
             info = os.stat(path)
             total += info.st_size
             if total > MAX_BYTES:
                 raise SourceError("source_too_large", "소스가 너무 큽니다.")
-            digest.update(b"F\0" + relative.encode() + b"\0" + (b"x" if info.st_mode & 0o111 else b"-"))
+            digest.update(
+                b"F\0" + relative.encode() + b"\0" + (b"x" if info.st_mode & 0o111 else b"-")
+            )
             with open(path, "rb") as handle:
                 for chunk in iter(lambda: handle.read(1 << 20), b""):
                     digest.update(chunk)

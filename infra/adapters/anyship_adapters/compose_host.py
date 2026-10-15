@@ -3,13 +3,14 @@
 SshRunner 위에서 하는 일: 앱 디렉터리와 파일 쓰기, 서버에 남은 이전 비밀 읽기, 이미지 전달,
 compose 실행, 마이그레이션, 헬스체크. 어떤 환경인지(주소 규칙, DB 방식)는 모른다.
 """
+
 import re
 import ssl
 import subprocess
 import time
 import urllib.error
 import urllib.request
-from typing import Callable
+from collections.abc import Callable
 
 from .compose import RenderedStack
 from .models import APP_NAME_PATTERN
@@ -49,9 +50,11 @@ class ComposeHost:
         """앱 디렉터리를 만들고 파일을 쓴다. 비밀이 든 파일(.env, app.env)은 권한 600."""
         directory = self._app_dir(app)
         result = self._ssh.run(["mkdir", "-p", directory])
-        for name, content, mode in ((".env", stack.compose_env, "0600"),
-                                    ("app.env", stack.app_env, "0600"),
-                                    ("compose.yaml", stack.compose_yaml, "0644")):
+        for name, content, mode in (
+            (".env", stack.compose_env, "0600"),
+            ("app.env", stack.app_env, "0600"),
+            ("compose.yaml", stack.compose_yaml, "0644"),
+        ):
             if not result.ok:
                 break
             result = self._ssh.put(f"{directory}/{name}", content, mode=mode)
@@ -61,8 +64,12 @@ class ComposeHost:
         """서비스 서버의 이미지를 서버로 흘려보낸다(docker save | ssh docker load, 레지스트리 없음)."""
         if not _IMAGE.match(image):
             raise ValueError("invalid image reference")
-        save = self._popen(["docker", "save", image], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE, env=safe_env())
+        save = self._popen(
+            ["docker", "save", image],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=safe_env(),
+        )
         try:
             loaded = self._ssh.run(["docker", "load"], stdin=save.stdout, timeout=timeout)
         finally:
@@ -76,8 +83,18 @@ class ComposeHost:
         return loaded if code == 0 else CommandResult(code, stderr=errors)
 
     def up(self, app: str, *, timeout: float = 300) -> CommandResult:
-        return self._ssh.run(["docker", "compose", "--project-directory", self._app_dir(app),
-                              "up", "-d", "--remove-orphans"], timeout=timeout)
+        return self._ssh.run(
+            [
+                "docker",
+                "compose",
+                "--project-directory",
+                self._app_dir(app),
+                "up",
+                "-d",
+                "--remove-orphans",
+            ],
+            timeout=timeout,
+        )
 
     def migrate(self, app: str, command: str, *, timeout: float = 300) -> CommandResult:
         """앱 컨테이너 안에서만 마이그레이션 명령을 실행한다(서버의 셸에서 실행하지 않는다).
@@ -85,9 +102,23 @@ class ComposeHost:
         `run`이 만드는 임시 컨테이너는 compose.yaml의 Traefik 라벨을 그대로 물려받는다. 그러면 Traefik이 같은 서비스의
         두 번째 서버로 등록했다가, 컨테이너가 사라진 뒤 설정이 갱신되기 전까지 없는 주소로 요청을 보내 502가 한 번씩 난다
         (실제 호스트에서 재현했다). 그래서 임시 컨테이너에서만 Traefik을 끈다."""
-        return self._ssh.run(["docker", "compose", "--project-directory", self._app_dir(app),
-                              "run", "--rm", "--label", "traefik.enable=false", "web", "sh", "-c", command],
-                             timeout=timeout)
+        return self._ssh.run(
+            [
+                "docker",
+                "compose",
+                "--project-directory",
+                self._app_dir(app),
+                "run",
+                "--rm",
+                "--label",
+                "traefik.enable=false",
+                "web",
+                "sh",
+                "-c",
+                command,
+            ],
+            timeout=timeout,
+        )
 
     # -- 이미 배포된 앱을 살펴보고 바꾸고 지우는 도구 ------------------------------------------
     def exists(self, app: str) -> bool:
@@ -116,8 +147,18 @@ class ComposeHost:
         return self._ssh.put(path, updated, mode="0644")
 
     def running_services(self, app: str) -> set[str]:
-        done = self._ssh.run(["docker", "compose", "--project-directory", self._app_dir(app),
-                              "ps", "--status", "running", "--services"])
+        done = self._ssh.run(
+            [
+                "docker",
+                "compose",
+                "--project-directory",
+                self._app_dir(app),
+                "ps",
+                "--status",
+                "running",
+                "--services",
+            ]
+        )
         return set(done.stdout.split()) if done.ok else set()
 
     def image_present(self, image: str) -> bool:
@@ -129,13 +170,25 @@ class ComposeHost:
         """앱 컨테이너 하나만 멈춘다(컨테이너와 볼륨은 지우지 않는다). 데이터를 옮기는 동안 쓰기를 막으려는 용도다."""
         if service not in ("web", "db"):
             raise ValueError("invalid service")
-        return self._ssh.run(["docker", "compose", "--project-directory", self._app_dir(app), "stop", service],
-                             timeout=timeout)
+        return self._ssh.run(
+            ["docker", "compose", "--project-directory", self._app_dir(app), "stop", service],
+            timeout=timeout,
+        )
 
     def down(self, app: str, *, timeout: float = 120) -> CommandResult:
         """컨테이너, 네트워크, DB 볼륨(데이터)을 모두 지운다."""
-        return self._ssh.run(["docker", "compose", "--project-directory", self._app_dir(app),
-                              "down", "--volumes", "--remove-orphans"], timeout=timeout)
+        return self._ssh.run(
+            [
+                "docker",
+                "compose",
+                "--project-directory",
+                self._app_dir(app),
+                "down",
+                "--volumes",
+                "--remove-orphans",
+            ],
+            timeout=timeout,
+        )
 
     def remove_dir(self, app: str) -> CommandResult:
         return self._ssh.run(["rm", "-r", "-f", self._app_dir(app)])
@@ -152,9 +205,15 @@ def _status(url: str, verify_tls: bool, timeout: float = 5) -> int | None:
         return None
 
 
-def wait_healthy(url: str, *, attempts: int = 30, delay: float = 2.0, verify_tls: bool = True,
-                 fetch: Callable[[str, bool], int | None] = _status,
-                 sleep: Callable[[float], None] = time.sleep) -> tuple[bool, int | None]:
+def wait_healthy(
+    url: str,
+    *,
+    attempts: int = 30,
+    delay: float = 2.0,
+    verify_tls: bool = True,
+    fetch: Callable[[str, bool], int | None] = _status,
+    sleep: Callable[[float], None] = time.sleep,
+) -> tuple[bool, int | None]:
     """서비스 서버에서 공개 주소로 요청해 200이 올 때까지 기다린다. (성공 여부, 마지막 상태 코드)
 
     verify_tls=False는 Let's Encrypt staging 인증서를 시험할 때만 쓴다."""

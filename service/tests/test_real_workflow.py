@@ -1,4 +1,5 @@
 """Exercise the real GitHub adapter against HTTP fixtures, never real remote writes."""
+
 import hashlib
 import json
 import time
@@ -26,7 +27,9 @@ class GitHubHTTP:
         self.calls = []
         self.refs = {}
         self.commits = {BASE: {"sha": BASE, "tree": {"sha": TREE}, "parents": []}}
-        self.trees = {TREE: [{"path": "README.md", "type": "blob", "mode": "100644", "sha": "c" * 40}]}
+        self.trees = {
+            TREE: [{"path": "README.md", "type": "blob", "mode": "100644", "sha": "c" * 40}]
+        }
         self.prs = []
         self.head = BASE
         self.revoked = False
@@ -43,13 +46,20 @@ class GitHubHTTP:
 
     @property
     def writes(self):
-        return [(method, path, body) for method, path, body in self.calls
-                if method == "POST" and path != "/login/oauth/access_token"]
+        return [
+            (method, path, body)
+            for method, path, body in self.calls
+            if method == "POST" and path != "/login/oauth/access_token"
+        ]
 
     def __call__(self, request):
         path = request.url.path
         method = request.method
-        body = json.loads(request.content) if request.headers.get("content-type") == "application/json" else {}
+        body = (
+            json.loads(request.content)
+            if request.headers.get("content-type") == "application/json"
+            else {}
+        )
         self.calls.append((method, path, body))
         status = 200
         if path == "/login/oauth/access_token":
@@ -60,13 +70,37 @@ class GitHubHTTP:
             if path == "/user":
                 data = {"id": self.user_id, "login": f"user-{self.user_id}"}
             elif path == "/user/installations":
-                data = {"installations": [] if self.revoked else [{"id": 9, "account": {"login": "owner"}, "permissions": self.permissions, "suspended_at": "2026-01-01" if self.suspended else None}]}
+                data = {
+                    "installations": []
+                    if self.revoked
+                    else [
+                        {
+                            "id": 9,
+                            "account": {"login": "owner"},
+                            "permissions": self.permissions,
+                            "suspended_at": "2026-01-01" if self.suspended else None,
+                        }
+                    ]
+                }
             elif path == "/user/installations/9/repositories":
-                data = {"repositories": [{"id": 123, "full_name": NAME, "private": True, "default_branch": "main", "permissions": {"push": self.writable}, "archived": self.archived}] if self.repo_selected else []}
+                data = {
+                    "repositories": [
+                        {
+                            "id": 123,
+                            "full_name": NAME,
+                            "private": True,
+                            "default_branch": "main",
+                            "permissions": {"push": self.writable},
+                            "archived": self.archived,
+                        }
+                    ]
+                    if self.repo_selected
+                    else []
+                }
             else:
                 prefix = f"/repos/{NAME}"
                 assert path.startswith(prefix), path
-                route = path[len(prefix):]
+                route = path[len(prefix) :]
                 if route == "/branches":
                     data = [] if self.empty else [{"name": "main", "commit": {"sha": self.head}}]
                 elif route == "/branches/main":
@@ -77,7 +111,9 @@ class GitHubHTTP:
                     data = {"tree": self.trees[route.rsplit("/", 1)[1]], "truncated": False}
                 elif route == "/git/trees":
                     assert body["base_tree"] == TREE
-                    assert body["tree"] == [{"path": FILE_NAME, "mode": "100644", "type": "blob", "content": CONTENT}]
+                    assert body["tree"] == [
+                        {"path": FILE_NAME, "mode": "100644", "type": "blob", "content": CONTENT}
+                    ]
                     sha = hashlib.sha1(request.content).hexdigest()
                     self.trees[sha] = self.trees[TREE] + body["tree"]
                     data = {"sha": sha}
@@ -85,7 +121,11 @@ class GitHubHTTP:
                     assert body["parents"] == [BASE]
                     assert len(self.trees[body["tree"]]) == 2  # Existing README is preserved.
                     sha = hashlib.sha1(request.content).hexdigest()
-                    self.commits[sha] = {"sha": sha, "tree": {"sha": body["tree"]}, "parents": [{"sha": BASE}]}
+                    self.commits[sha] = {
+                        "sha": sha,
+                        "tree": {"sha": body["tree"]},
+                        "parents": [{"sha": BASE}],
+                    }
                     data = {"sha": sha}
                 elif route.startswith("/git/ref/heads/"):
                     branch = route.removeprefix("/git/ref/heads/")
@@ -112,9 +152,12 @@ class GitHubHTTP:
                         return httpx.Response(403, json={})
                     branch = body["head"]
                     number = len(self.prs) + 1
-                    data = {"number": number, "html_url": f"https://github.com/{NAME}/pull/{number}",
-                            "head": {"ref": branch, "sha": self.refs[branch], "repo": {"id": 123}},
-                            "base": {"ref": "main", "repo": {"id": 123}}}
+                    data = {
+                        "number": number,
+                        "html_url": f"https://github.com/{NAME}/pull/{number}",
+                        "head": {"ref": branch, "sha": self.refs[branch], "repo": {"id": 123}},
+                        "base": {"ref": "main", "repo": {"id": 123}},
+                    }
                     self.prs.append(data)
                     if self.lose_pr_response:
                         self.lose_pr_response = False
@@ -127,7 +170,11 @@ class GitHubHTTP:
 def login(client):
     start = client.get("/api/auth/github/start", follow_redirects=False)
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
-    result = client.get("/api/auth/github/callback", params={"state": state, "code": "fixture"}, follow_redirects=False)
+    result = client.get(
+        "/api/auth/github/callback",
+        params={"state": state, "code": "fixture"},
+        follow_redirects=False,
+    )
     assert result.headers["location"] == "/"
     return {"Origin": ORIGIN, "X-CSRF-Token": client.get("/api/me").json()["csrf_token"]}
 
@@ -137,13 +184,23 @@ def real(database_url, monkeypatch, request):
     remote = GitHubHTTP()
     with httpx.Client(transport=httpx.MockTransport(remote)) as transport:
         monkeypatch.setattr(httpx, "request", transport.request)
-        settings = Settings(database_url=database_url, token_key=Fernet.generate_key().decode(),
-                            github_client_id="test", github_client_secret="test", github_app_slug="anyship", ai_mode=getattr(request, "param", "placeholder"))
+        settings = Settings(
+            database_url=database_url,
+            token_key=Fernet.generate_key().decode(),
+            github_client_id="test",
+            github_client_secret="test",
+            github_app_slug="anyship",
+            ai_mode=getattr(request, "param", "placeholder"),
+        )
         app = create_app(settings)
         Base.metadata.create_all(app.state.engine)
         with TestClient(app, base_url=ORIGIN) as client:
             headers = login(client)
-            project = client.post("/api/projects", json={"repository_url": f"https://github.com/{NAME}", "branch": "main"}, headers=headers)
+            project = client.post(
+                "/api/projects",
+                json={"repository_url": f"https://github.com/{NAME}", "branch": "main"},
+                headers=headers,
+            )
             assert project.status_code == 201
             yield app, client, remote, headers, f"/api/projects/{project.json()['id']}"
 
@@ -158,12 +215,18 @@ def prepare(real):
 
 def publish(real, change):
     _, client, _, headers, endpoint = real
-    return client.post(endpoint + "/changes/pr", headers=headers, json={"review_hash": change["review_hash"]})
+    return client.post(
+        endpoint + "/changes/pr", headers=headers, json={"review_hash": change["review_hash"]}
+    )
 
 
 def test_full_flow_uses_actual_git_api_and_is_idempotent(real):
     _, client, remote, headers, endpoint = real
-    resolved = client.post("/api/github/resolve", headers=headers, json={"repository_url": f"https://github.com/{NAME}.git"})
+    resolved = client.post(
+        "/api/github/resolve",
+        headers=headers,
+        json={"repository_url": f"https://github.com/{NAME}.git"},
+    )
     assert resolved.json()["full_name"] == NAME
     change = prepare(real)
     assert not remote.writes
@@ -171,7 +234,9 @@ def test_full_flow_uses_actual_git_api_and_is_idempotent(real):
     response = publish(real, change)
     assert response.status_code == 200, response.text
     result = response.json()
-    assert result["status"] == "pr_created" and result["pr_url"] == f"https://github.com/{NAME}/pull/1"
+    assert (
+        result["status"] == "pr_created" and result["pr_url"] == f"https://github.com/{NAME}/pull/1"
+    )
     assert remote.head == BASE and len(remote.refs) == 1
     assert client.get(endpoint + "/changes").json() == result
     count = len(remote.writes)
@@ -179,7 +244,16 @@ def test_full_flow_uses_actual_git_api_and_is_idempotent(real):
     assert len(remote.writes) == count
 
 
-@pytest.mark.parametrize("url", ["http://github.com/owner/repo", "https://evil.invalid/owner/repo", "https://github.com/owner/repo/tree/main", "https://token@github.com/owner/repo", "https://github.com/owner/repo?token=secret"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://github.com/owner/repo",
+        "https://evil.invalid/owner/repo",
+        "https://github.com/owner/repo/tree/main",
+        "https://token@github.com/owner/repo",
+        "https://github.com/owner/repo?token=secret",
+    ],
+)
 def test_url_validation_before_remote_requests(real, url):
     _, client, remote, headers, _ = real
     calls = len(remote.calls)
@@ -191,7 +265,12 @@ def test_url_validation_before_remote_requests(real, url):
 def test_revocation_write_permissions_and_csrf(real):
     _, client, remote, headers, endpoint = real
     change = prepare(real)
-    assert client.post(endpoint + "/changes/pr", json={"review_hash": change["review_hash"]}).status_code == 403
+    assert (
+        client.post(
+            endpoint + "/changes/pr", json={"review_hash": change["review_hash"]}
+        ).status_code
+        == 403
+    )
     remote.permissions["pull_requests"] = "read"
     assert publish(real, change).status_code == 403
     remote.permissions["pull_requests"] = "write"
@@ -211,7 +290,9 @@ def test_users_are_isolated(real):
         headers = login(other)
         assert other.get(endpoint + "/changes").status_code == 404
         for action in ("analysis", "changes/apply", "changes/pr"):
-            response = other.post(endpoint + "/" + action, headers=headers, json={"review_hash": "a" * 64})
+            response = other.post(
+                endpoint + "/" + action, headers=headers, json={"review_hash": "a" * 64}
+            )
             assert response.status_code == 404
     assert not remote.writes
 
@@ -266,7 +347,10 @@ def test_busy_lease_and_restart_recovery(real):
         row.status, row.lease_until = "publishing", int(time.time()) + 600
         session.commit()
     assert publish(real, change).status_code == 409
-    assert client.post(endpoint + "/analysis", headers=headers, json={"restart": True}).status_code == 409
+    assert (
+        client.post(endpoint + "/analysis", headers=headers, json={"restart": True}).status_code
+        == 409
+    )
     assert not remote.writes
     with app.state.sessions() as session:
         row = session.scalar(select(CodeChange))
@@ -302,7 +386,9 @@ def test_production_disallows_ai_placeholder():
 def test_unavailable_ai_does_not_fall_back_to_placeholder(real):
     _, client, remote, headers, endpoint = real
     for route in ("analysis", "changes/apply", "changes/pr"):
-        result = client.post(endpoint + "/" + route, headers=headers, json={"review_hash": "a" * 64})
+        result = client.post(
+            endpoint + "/" + route, headers=headers, json={"review_hash": "a" * 64}
+        )
         assert result.status_code == 503
     assert not remote.writes
 

@@ -3,14 +3,12 @@ import urllib.error
 from pathlib import Path
 
 import pytest
-
-from anyship_adapters import render_stack
-from anyship_adapters import compose_host
-from anyship_adapters.compose_host import ComposeHost, wait_healthy
-from anyship_adapters.ssh import SshConnection, SshRunner
-
 from fakes import FakePopen, FakeServer
 from specs import GENERATED
+
+from anyship_adapters import compose_host, render_stack
+from anyship_adapters.compose_host import ComposeHost, wait_healthy
+from anyship_adapters.ssh import SshConnection, SshRunner
 
 HOST = "todo.demo.onprem.anyship.cloud"
 
@@ -69,7 +67,9 @@ def test_a_redeploy_reuses_the_generated_secrets_found_on_the_server():
 
 def test_lines_that_are_not_plain_quoted_assignments_are_ignored_when_reading():
     host, server = make()
-    server.files["/opt/apps/todo/app.env"] = b"GOOD='1'\nBAD=2\nlower='x'\nALSO_BAD='a'b'\n# comment\n"
+    server.files["/opt/apps/todo/app.env"] = (
+        b"GOOD='1'\nBAD=2\nlower='x'\nALSO_BAD='a'b'\n# comment\n"
+    )
     assert host.read_previous_env("todo") == {"GOOD": "1"}
 
 
@@ -101,7 +101,9 @@ def test_a_timed_out_transfer_stops_docker_save_and_is_reported_as_a_timeout():
     def hangs(cmd, **kw):
         raise subprocess.TimeoutExpired(cmd, 1)
 
-    host = ComposeHost(SshRunner(SshConnection("3.38.88.141", Path("/key")), runner=hangs), popen=popen)
+    host = ComposeHost(
+        SshRunner(SshConnection("3.38.88.141", Path("/key")), runner=hangs), popen=popen
+    )
     result = host.load_image("todo:3f2a9c1", timeout=1)
     assert saves[0].killed
     assert result.timed_out and not result.ok  # 종료 코드 -9가 아니라 시간 초과로 보인다
@@ -119,15 +121,29 @@ def test_only_app_and_commit_sha_images_are_accepted(image):
 def test_up_runs_compose_in_the_app_directory():
     host, server = make()
     host.up("todo")
-    assert server.last() == ["docker", "compose", "--project-directory", "/opt/apps/todo",
-                             "up", "-d", "--remove-orphans"]
+    assert server.last() == [
+        "docker",
+        "compose",
+        "--project-directory",
+        "/opt/apps/todo",
+        "up",
+        "-d",
+        "--remove-orphans",
+    ]
 
 
 def test_migrate_runs_inside_the_app_container_and_the_command_stays_one_argument():
     host, server = make()
     host.migrate("todo", "python -m app.migrate; echo done")
     assert server.last()[-4:] == ["web", "sh", "-c", "python -m app.migrate; echo done"]
-    assert server.last()[:6] == ["docker", "compose", "--project-directory", "/opt/apps/todo", "run", "--rm"]
+    assert server.last()[:6] == [
+        "docker",
+        "compose",
+        "--project-directory",
+        "/opt/apps/todo",
+        "run",
+        "--rm",
+    ]
 
 
 def test_the_migration_container_is_hidden_from_traefik():
@@ -136,14 +152,22 @@ def test_the_migration_container_is_hidden_from_traefik():
     host.migrate("todo", "python -m app.migrate")
     command = server.last()
     assert command[command.index("--label") + 1] == "traefik.enable=false"
-    assert command.index("--label") < command.index("web")  # 서비스 이름보다 앞에 와야 run의 옵션으로 읽힌다
+    assert command.index("--label") < command.index(
+        "web"
+    )  # 서비스 이름보다 앞에 와야 run의 옵션으로 읽힌다
     assert command.count("--label") == 1 and command[-1] == "python -m app.migrate"
 
 
-@pytest.mark.parametrize("call", [
-    lambda h: h.up("Bad Name"), lambda h: h.up("../etc"), lambda h: h.migrate("a", "x"),
-    lambda h: h.write_stack("x" * 70, None), lambda h: h.read_previous_env("a;b"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda h: h.up("Bad Name"),
+        lambda h: h.up("../etc"),
+        lambda h: h.migrate("a", "x"),
+        lambda h: h.write_stack("x" * 70, None),
+        lambda h: h.read_previous_env("a;b"),
+    ],
+)
 def test_bad_app_names_are_rejected_before_anything_runs(call):
     host, server = make()
     with pytest.raises(ValueError):
@@ -191,6 +215,7 @@ def test_status_maps_http_errors_to_their_code_and_connection_problems_to_none(m
 # --- 이미 배포된 앱을 살펴보고 바꾸고 지우는 도구 -----------------------------------------------
 def lifecycle():
     from fakes import LifecycleServer
+
     server = LifecycleServer()
     ssh = SshRunner(SshConnection("3.38.88.141", Path("/key")), runner=server)
     return ComposeHost(ssh, popen=server.popen), server
@@ -222,7 +247,9 @@ def test_set_image_tag_changes_only_the_app_image_line():
     assert host.set_image_tag("todo", "bbbbbbb").ok
     old = before["/opt/apps/todo/compose.yaml"].decode().splitlines()
     new = server.files["/opt/apps/todo/compose.yaml"].decode().splitlines()
-    assert [(a, b) for a, b in zip(old, new) if a != b] == [('    image: "todo:aaaaaaa"', '    image: "todo:bbbbbbb"')]
+    assert [(a, b) for a, b in zip(old, new, strict=True) if a != b] == [
+        ('    image: "todo:aaaaaaa"', '    image: "todo:bbbbbbb"')
+    ]
     assert len(old) == len(new)
     for name in (".env", "app.env"):  # 비밀 파일은 건드리지 않는다
         assert server.files[f"/opt/apps/todo/{name}"] == before[f"/opt/apps/todo/{name}"]
@@ -233,8 +260,10 @@ def test_set_image_tag_writes_nothing_when_the_app_line_is_missing_or_appears_tw
     host, server = deployed()
     path = "/opt/apps/todo/compose.yaml"
     text = server.files[path].decode()
-    for broken in (text.replace('image: "todo:aaaaaaa"', 'image: "other:aaaaaaa"'),
-                   text.replace("  db:", '    image: "todo:aaaaaaa"\n  db:')):
+    for broken in (
+        text.replace('image: "todo:aaaaaaa"', 'image: "other:aaaaaaa"'),
+        text.replace("  db:", '    image: "todo:aaaaaaa"\n  db:'),
+    ):
         server.files[path] = broken.encode()
         result = host.set_image_tag("todo", "bbbbbbb")
         assert not result.ok and server.files[path] == broken.encode()
@@ -263,8 +292,15 @@ def test_running_services_and_image_presence_come_from_the_server():
 def test_down_removes_the_volumes_and_the_directory_removal_targets_exactly_the_app():
     host, server = deployed()
     host.down("todo")
-    assert server.commands[-1] == ["docker", "compose", "--project-directory", "/opt/apps/todo",
-                                   "down", "--volumes", "--remove-orphans"]
+    assert server.commands[-1] == [
+        "docker",
+        "compose",
+        "--project-directory",
+        "/opt/apps/todo",
+        "down",
+        "--volumes",
+        "--remove-orphans",
+    ]
     host.remove_dir("todo")
     assert server.commands[-1] == ["rm", "-r", "-f", "/opt/apps/todo"]
     assert not any(path.startswith("/opt/apps/todo/") for path in server.files)

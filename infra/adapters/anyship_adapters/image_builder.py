@@ -15,6 +15,7 @@ AssumeRole 권한을 가진다. 격리된 빌드 환경은 확장 항목이라, 
 
 실패는 BuildError(AdapterError 포함)로 던진다. 호출하는 쪽이 결과의 오류로 바꾼다.
 """
+
 import os
 import re
 import shutil
@@ -22,10 +23,10 @@ import subprocess
 import tempfile
 import threading
 from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Iterator
-from contextlib import contextmanager
 
 from .base import LogFn
 from .models import APP_NAME_PATTERN, IMAGE_TAG_PATTERN, AdapterError, LogEvent
@@ -50,8 +51,12 @@ class BuildError(Exception):
         self.error, self.tail = error, tail
 
 
-def _fail(code: str, message: str, hint: str | None = None, retryable: bool = False, tail: str = "") -> BuildError:
-    return BuildError(AdapterError(code=code, message=message, hint=hint, retryable=retryable), tail)
+def _fail(
+    code: str, message: str, hint: str | None = None, retryable: bool = False, tail: str = ""
+) -> BuildError:
+    return BuildError(
+        AdapterError(code=code, message=message, hint=hint, retryable=retryable), tail
+    )
 
 
 @dataclass(frozen=True)
@@ -61,18 +66,51 @@ class BuiltImage:
 
 
 class ImageBuilder:
-    def __init__(self, *, binary: str = "docker", timeout: float = 600, popen=subprocess.Popen, run=subprocess.run):
-        self._binary, self._timeout, self._popen, self._run = binary, timeout, popen, run  # 시험에서는 가짜로 바꿔 끼운다
+    def __init__(
+        self,
+        *,
+        binary: str = "docker",
+        timeout: float = 600,
+        popen=subprocess.Popen,
+        run=subprocess.run,
+    ):
+        self._binary, self._timeout, self._popen, self._run = (
+            binary,
+            timeout,
+            popen,
+            run,
+        )  # 시험에서는 가짜로 바꿔 끼운다
 
-    def build(self, source_dir: Path, app: str, commit_sha: str, log: LogFn, *, dockerfile: str = "Dockerfile") -> BuiltImage:
+    def build(
+        self,
+        source_dir: Path,
+        app: str,
+        commit_sha: str,
+        log: LogFn,
+        *,
+        dockerfile: str = "Dockerfile",
+    ) -> BuiltImage:
         source = Path(source_dir)
         if not _APP.match(app) or not _TAG.match(commit_sha):
-            raise _fail("invalid_build_input", "앱 이름이나 커밋 SHA 형식이 올바르지 않습니다.",
-                        hint="앱 이름은 소문자로 시작하는 3~63자, SHA는 16진수 7~40자여야 합니다.")
+            raise _fail(
+                "invalid_build_input",
+                "앱 이름이나 커밋 SHA 형식이 올바르지 않습니다.",
+                hint="앱 이름은 소문자로 시작하는 3~63자, SHA는 16진수 7~40자여야 합니다.",
+            )
         image = f"{app}:{commit_sha}"
         relative = self._check_source(source, dockerfile)
-        with self._exclusive(app, commit_sha), tempfile.TemporaryDirectory(prefix="anyship-build-") as work:
-            log(LogEvent(step=1, total=2, name="빌드 준비", message="소스를 임시 폴더로 복사하는 중(.git과 .env*는 제외)"))
+        with (
+            self._exclusive(app, commit_sha),
+            tempfile.TemporaryDirectory(prefix="anyship-build-") as work,
+        ):
+            log(
+                LogEvent(
+                    step=1,
+                    total=2,
+                    name="빌드 준비",
+                    message="소스를 임시 폴더로 복사하는 중(.git과 .env*는 제외)",
+                )
+            )
             context = self._copy_context(source, Path(work))
             self._build(context, relative, image, log)
         return BuiltImage(image=image, image_id=self._inspect(image))
@@ -81,14 +119,32 @@ class ImageBuilder:
         """앱의 이미지 중 가장 최근 keep개만 남기고 지운다. 지운 이미지 이름을 돌려준다(쓰이는 중이면 건너뜀)."""
         if not _APP.match(app) or keep < 1:
             raise ValueError("invalid prune arguments")
-        listing = self._run([self._binary, "image", "ls", "--filter", f"reference={app}", "--format",
-                             "{{.Tag}}\t{{.CreatedAt}}"], capture_output=True, text=True, env=safe_env(), timeout=60)
+        listing = self._run(
+            [
+                self._binary,
+                "image",
+                "ls",
+                "--filter",
+                f"reference={app}",
+                "--format",
+                "{{.Tag}}\t{{.CreatedAt}}",
+            ],
+            capture_output=True,
+            text=True,
+            env=safe_env(),
+            timeout=60,
+        )
         rows = [line.split("\t", 1) for line in listing.stdout.splitlines() if "\t" in line]
         tags = [(created, tag) for tag, created in rows if _TAG.match(tag)]
         removed = []
         for _, tag in sorted(tags, reverse=True)[keep:]:
-            done = self._run([self._binary, "image", "rm", f"{app}:{tag}"], capture_output=True, text=True,
-                             env=safe_env(), timeout=60)
+            done = self._run(
+                [self._binary, "image", "rm", f"{app}:{tag}"],
+                capture_output=True,
+                text=True,
+                env=safe_env(),
+                timeout=60,
+            )
             if done.returncode == 0:
                 removed.append(f"{app}:{tag}")
         return removed
@@ -98,7 +154,11 @@ class ImageBuilder:
     def _exclusive(self, app: str, sha: str) -> Iterator[None]:
         with _GUARD:
             if (app, sha) in _ACTIVE:
-                raise _fail("build_in_progress", "같은 앱과 커밋의 빌드가 이미 진행 중입니다.", retryable=True)
+                raise _fail(
+                    "build_in_progress",
+                    "같은 앱과 커밋의 빌드가 이미 진행 중입니다.",
+                    retryable=True,
+                )
             _ACTIVE.add((app, sha))
         try:
             yield
@@ -108,15 +168,29 @@ class ImageBuilder:
 
     def _check_source(self, source: Path, dockerfile: str) -> str:
         path = PurePosixPath(dockerfile)
-        if not source.is_dir() or not dockerfile or path.is_absolute() or ".." in path.parts or "\\" in dockerfile:
+        if (
+            not source.is_dir()
+            or not dockerfile
+            or path.is_absolute()
+            or ".." in path.parts
+            or "\\" in dockerfile
+        ):
             raise _fail("invalid_build_input", "소스 폴더나 Dockerfile 경로가 올바르지 않습니다.")
         target = source / path
         try:  # Dockerfile이 링크이거나 소스 폴더 밖을 가리키면 거부한다
-            inside = target.is_file() and not target.is_symlink() and target.resolve().is_relative_to(source.resolve())
+            inside = (
+                target.is_file()
+                and not target.is_symlink()
+                and target.resolve().is_relative_to(source.resolve())
+            )
         except OSError:
             inside = False
         if not inside:
-            raise _fail("invalid_build_input", "소스 폴더 안에서 Dockerfile을 찾지 못했습니다.", hint=f"경로: {dockerfile}")
+            raise _fail(
+                "invalid_build_input",
+                "소스 폴더 안에서 Dockerfile을 찾지 못했습니다.",
+                hint=f"경로: {dockerfile}",
+            )
         return str(path)
 
     def _copy_context(self, source: Path, work: Path) -> Path:
@@ -128,16 +202,37 @@ class ImageBuilder:
                 if name not in skip:
                     size += (Path(root) / name).lstat().st_size
             if size > MAX_CONTEXT_BYTES:
-                raise _fail("build_context_too_large", "빌드할 소스가 너무 큽니다.",
-                            hint=f"{MAX_CONTEXT_BYTES // (1024 * 1024)}MB 이하여야 합니다. .dockerignore가 아니라 소스 자체를 줄여 주세요.")
+                raise _fail(
+                    "build_context_too_large",
+                    "빌드할 소스가 너무 큽니다.",
+                    hint=f"{MAX_CONTEXT_BYTES // (1024 * 1024)}MB 이하여야 합니다. .dockerignore가 아니라 소스 자체를 줄여 주세요.",
+                )
         return Path(shutil.copytree(source, work / "context", symlinks=True, ignore=ignore))
 
     def _build(self, context: Path, dockerfile: str, image: str, log: LogFn) -> None:
-        args = [self._binary, "build", "--platform", "linux/amd64", "--tag", image, "--file", str(context / dockerfile), str(context)]
+        args = [
+            self._binary,
+            "build",
+            "--platform",
+            "linux/amd64",
+            "--tag",
+            image,
+            "--file",
+            str(context / dockerfile),
+            str(context),
+        ]
         log(LogEvent(step=2, total=2, name="이미지 빌드", message=f"이미지 {image} 빌드 시작"))
         try:
-            child = self._popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                env=safe_env(), text=True, encoding="utf-8", errors="replace")
+            child = self._popen(
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=safe_env(),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
         except FileNotFoundError:
             raise _fail("docker_not_found", "서비스 서버에서 docker를 찾을 수 없습니다.") from None
         expired, tail = [], deque(maxlen=TAIL_LINES)
@@ -155,7 +250,9 @@ class ImageBuilder:
                     tail.append(line)
                     log(LogEvent(step=2, total=2, name="이미지 빌드", message=line))
             code = child.wait()
-        except BaseException:  # 로그 함수가 예외를 던지거나 작업이 취소되면 도커 클라이언트를 남겨 두지 않는다
+        except (
+            BaseException
+        ):  # 로그 함수가 예외를 던지거나 작업이 취소되면 도커 클라이언트를 남겨 두지 않는다
             child.kill()
             child.wait()
             raise
@@ -163,19 +260,40 @@ class ImageBuilder:
             timer.cancel()
         text = "\n".join(tail)
         if expired:
-            raise _fail("build_timeout", "이미지 빌드가 제한 시간 안에 끝나지 않아 중단했습니다.",
-                        hint="캐시가 쌓이면 다음 빌드는 더 빠릅니다. 다시 시도해 주세요.", retryable=True, tail=text)
+            raise _fail(
+                "build_timeout",
+                "이미지 빌드가 제한 시간 안에 끝나지 않아 중단했습니다.",
+                hint="캐시가 쌓이면 다음 빌드는 더 빠릅니다. 다시 시도해 주세요.",
+                retryable=True,
+                tail=text,
+            )
         if code != 0:
-            if "Cannot connect to the Docker daemon" in text or "permission denied while trying to connect" in text:
-                raise _fail("docker_unavailable", "도커 데몬에 연결할 수 없습니다.",
-                            hint="서비스 서버에서 도커가 실행 중이고 서비스 사용자가 docker 그룹에 속하는지 확인해 주세요.",
-                            retryable=True, tail=text)
-            raise _fail("docker_build_failed", "이미지 빌드가 실패했습니다.", hint="Dockerfile과 의존성 설치 단계를 확인해 주세요.",
-                        tail=text)
+            if (
+                "Cannot connect to the Docker daemon" in text
+                or "permission denied while trying to connect" in text
+            ):
+                raise _fail(
+                    "docker_unavailable",
+                    "도커 데몬에 연결할 수 없습니다.",
+                    hint="서비스 서버에서 도커가 실행 중이고 서비스 사용자가 docker 그룹에 속하는지 확인해 주세요.",
+                    retryable=True,
+                    tail=text,
+                )
+            raise _fail(
+                "docker_build_failed",
+                "이미지 빌드가 실패했습니다.",
+                hint="Dockerfile과 의존성 설치 단계를 확인해 주세요.",
+                tail=text,
+            )
 
     def _inspect(self, image: str) -> str:
-        done = self._run([self._binary, "image", "inspect", "--format", "{{.Id}} {{.Architecture}}", image],
-                         capture_output=True, text=True, env=safe_env(), timeout=60)
+        done = self._run(
+            [self._binary, "image", "inspect", "--format", "{{.Id}} {{.Architecture}}", image],
+            capture_output=True,
+            text=True,
+            env=safe_env(),
+            timeout=60,
+        )
         parts = done.stdout.split()
         if done.returncode != 0 or len(parts) != 2:
             raise _fail("docker_build_failed", "빌드한 이미지를 확인하지 못했습니다.")

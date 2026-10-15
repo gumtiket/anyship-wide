@@ -16,9 +16,7 @@ class GitHubRepository:
         try:
             self.repository = repository.parse_repo_url(url)
         except ValueError:
-            raise InvalidRepositoryError(
-                "Expected a GitHub HTTPS repository URL."
-            ) from None
+            raise InvalidRepositoryError("Expected a GitHub HTTPS repository URL.") from None
 
         if not token.strip():
             raise AuthenticationError("A GitHub token is required.")
@@ -40,9 +38,7 @@ class GitHubRepository:
 
         with translate_errors():
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            return repository.clone_repository(
-                self.repository, branch, self.path, self._token
-            )
+            return repository.clone_repository(self.repository, branch, self.path, self._token)
 
     def inspect(self, *, base_branch: str | None = None) -> Workspace:
         with translate_errors():
@@ -164,6 +160,4 @@ class GitHubRepository:
                     raise InvalidRepositoryError("Origin must use GitHub HTTPS.") from None
 
                 if remote_repository.lower() != self.repository.lower():
-                    raise InvalidRepositoryError(
-                        "Origin does not match the requested repository."
-                    )
+                    raise InvalidRepositoryError("Origin does not match the requested repository.")

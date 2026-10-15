@@ -1,4 +1,5 @@
 """Onboarding authorization, state lifecycle, account isolation and recovery."""
+
 import time
 from urllib.parse import parse_qs, urlsplit
 
@@ -11,7 +12,7 @@ from sqlalchemy import select
 from app.app import create_app
 from app.config import Settings
 from app.db import Base, RepositoryConnection
-from tests.test_real_workflow import GitHubHTTP, NAME, ORIGIN, login
+from tests.test_real_workflow import NAME, ORIGIN, GitHubHTTP, login
 
 ENDPOINT = "/api/github/connection"
 URL = f"https://github.com/{NAME}"
@@ -22,8 +23,15 @@ def onboarding(database_url, monkeypatch):
     remote = GitHubHTTP()
     with httpx.Client(transport=httpx.MockTransport(remote)) as transport:
         monkeypatch.setattr(httpx, "request", transport.request)
-        app = create_app(Settings(database_url=database_url,
-            token_key=Fernet.generate_key().decode(), github_client_id="test", github_client_secret="test", github_app_slug="anyship"))
+        app = create_app(
+            Settings(
+                database_url=database_url,
+                token_key=Fernet.generate_key().decode(),
+                github_client_id="test",
+                github_client_secret="test",
+                github_app_slug="anyship",
+            )
+        )
         Base.metadata.create_all(app.state.engine)
         with TestClient(app, base_url=ORIGIN) as client:
             yield app, client, remote, login(client)
@@ -40,7 +48,9 @@ def check(client, headers, draft):
 
 
 def authorize(client, headers, draft):
-    response = client.post(ENDPOINT + "/authorize", headers=headers, json={"connection_id": draft["id"]})
+    response = client.post(
+        ENDPOINT + "/authorize", headers=headers, json={"connection_id": draft["id"]}
+    )
     assert response.status_code == 200
     url = urlsplit(response.json()["url"])
     assert url.scheme == "https" and url.netloc == "github.com"
@@ -84,7 +94,12 @@ def test_other_user_cannot_read_or_consume_connection(onboarding):
         assert other.get(ENDPOINT).json() is None
         assert check(other, second_headers, draft).status_code == 409
         assert returned(other, second_headers, state).status_code == 409
-        assert other.request("DELETE", ENDPOINT, headers=second_headers, json={"connection_id": draft["id"]}).status_code == 409
+        assert (
+            other.request(
+                "DELETE", ENDPOINT, headers=second_headers, json={"connection_id": draft["id"]}
+            ).status_code
+            == 409
+        )
     assert returned(client, headers, state).json()["status"] == "ready"
 
 
@@ -111,16 +126,21 @@ def test_draft_survives_relogin_and_is_cleared_only_after_project_commit(onboard
     assert client.get(ENDPOINT).json()["id"] == again["id"]
 
 
-@pytest.mark.parametrize("attribute,value,status", [
-    ("revoked", True, "authorization_required"),
-    ("repo_selected", False, "authorization_required"),
-    ("writable", False, "write_required"),
-    ("archived", True, "archived"),
-    ("suspended", True, "suspended"),
-    ("permissions", {"contents": "read", "pull_requests": "write"}, "permissions_required"),
-    ("empty", True, "empty_repository"),
-])
-def test_current_permissions_are_rechecked_even_after_valid_return(onboarding, attribute, value, status):
+@pytest.mark.parametrize(
+    "attribute,value,status",
+    [
+        ("revoked", True, "authorization_required"),
+        ("repo_selected", False, "authorization_required"),
+        ("writable", False, "write_required"),
+        ("archived", True, "archived"),
+        ("suspended", True, "suspended"),
+        ("permissions", {"contents": "read", "pull_requests": "write"}, "permissions_required"),
+        ("empty", True, "empty_repository"),
+    ],
+)
+def test_current_permissions_are_rechecked_even_after_valid_return(
+    onboarding, attribute, value, status
+):
     _, client, remote, headers = onboarding
     draft = save(client, headers)
     assert check(client, headers, draft).json()["status"] == "ready"
@@ -153,14 +173,31 @@ def test_forged_expired_and_superseded_return_cannot_change_connection(onboardin
 def test_input_csrf_cancellation_and_expiry(onboarding):
     app, client, _, headers = onboarding
     draft = save(client, headers)
-    for bad in ("https://attacker.invalid/owner/repo", "https://github.com/owner/repo/tree/main", "file:///secret"):
-        assert client.post(ENDPOINT, headers=headers, json={"repository_url": bad}).status_code == 422
+    for bad in (
+        "https://attacker.invalid/owner/repo",
+        "https://github.com/owner/repo/tree/main",
+        "file:///secret",
+    ):
+        assert (
+            client.post(ENDPOINT, headers=headers, json={"repository_url": bad}).status_code == 422
+        )
     assert client.get(ENDPOINT).json()["id"] == draft["id"]
-    for suffix, body in (("", {"repository_url": URL}), ("/check", {"connection_id": draft["id"]}),
-                         ("/authorize", {"connection_id": draft["id"]}), ("/return", {"state": "anything"})):
+    for suffix, body in (
+        ("", {"repository_url": URL}),
+        ("/check", {"connection_id": draft["id"]}),
+        ("/authorize", {"connection_id": draft["id"]}),
+        ("/return", {"state": "anything"}),
+    ):
         assert client.post(ENDPOINT + suffix, json=body).status_code == 403
-    assert client.request("DELETE", ENDPOINT, json={"connection_id": draft["id"]}).status_code == 403
-    assert client.request("DELETE", ENDPOINT, headers=headers, json={"connection_id": draft["id"]}).status_code == 200
+    assert (
+        client.request("DELETE", ENDPOINT, json={"connection_id": draft["id"]}).status_code == 403
+    )
+    assert (
+        client.request(
+            "DELETE", ENDPOINT, headers=headers, json={"connection_id": draft["id"]}
+        ).status_code
+        == 200
+    )
     assert client.get(ENDPOINT).json() is None
     draft = save(client, headers)
     with app.state.sessions() as session:

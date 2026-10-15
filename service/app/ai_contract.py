@@ -1,5 +1,7 @@
 """Contract only. No model call, fabricated result or code execution is provided."""
+
 from typing import Literal, Protocol
+
 from pydantic import BaseModel, Field
 
 

@@ -1,4 +1,5 @@
 """Reuse the adapter's fake server through the same injectable connect boundary."""
+
 import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,14 +9,15 @@ from anyship_adapters.deployer import Deployer
 from anyship_adapters.image_builder import BuiltImage
 from anyship_adapters.onprem import OnpremAdapter
 from anyship_adapters.ssh import SshConnection, SshRunner
-
 from app.onprem_transport import Transport
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def load_fixture(name):
-    spec = importlib.util.spec_from_file_location("onprem_fixture_" + name, ROOT / "infra/adapters/tests" / (name + ".py"))
+    spec = importlib.util.spec_from_file_location(
+        "onprem_fixture_" + name, ROOT / "infra/adapters/tests" / (name + ".py")
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -48,7 +50,9 @@ class DNS:
 class RecordingTransport(Transport):
     def __init__(self, directory):
         key = directory / "fixture_key"
-        Path(str(key) + ".pub").write_text("ssh-ed25519 AAAA" + "A" * 64 + " fixture", encoding="utf-8")
+        Path(str(key) + ".pub").write_text(
+            "ssh-ed25519 AAAA" + "A" * 64 + " fixture", encoding="utf-8"
+        )
         super().__init__(SimpleNamespace(deploy_ssh_key=key, app_origin="http://localhost:8000"))
         self.tokens = {}
 
@@ -62,6 +66,12 @@ def parts():
     dns = DNS()
     runner = SshRunner(SshConnection("3.38.88.141", Path("fixture-key")), runner=server)
     host = ComposeHost(runner, popen=server.popen)
-    adapter = OnpremAdapter(Path("fixture-key"), connect=lambda env: (runner, host),
-                            healthy=lambda *args, **kwargs: (True, 200), dns=dns)
-    return SimpleNamespace(server=server, dns=dns, deployer=Deployer({"onprem": adapter}, Builder()))
+    adapter = OnpremAdapter(
+        Path("fixture-key"),
+        connect=lambda env: (runner, host),
+        healthy=lambda *args, **kwargs: (True, 200),
+        dns=dns,
+    )
+    return SimpleNamespace(
+        server=server, dns=dns, deployer=Deployer({"onprem": adapter}, Builder())
+    )

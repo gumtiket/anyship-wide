@@ -1,4 +1,5 @@
 """Bounded Git tree/blob snapshots. Never execute repository configuration or code."""
+
 import base64
 import hashlib
 import re
@@ -10,7 +11,18 @@ MAX_FILES = 2000
 MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 20 * 1024 * 1024
 SHA = re.compile(r"^[0-9a-f]{40}$")
-EXCLUDED = {".git", ".github", ".aws", ".ssh", ".venv", "venv", "node_modules", "__pycache__", "dist", "build"}
+EXCLUDED = {
+    ".git",
+    ".github",
+    ".aws",
+    ".ssh",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+}
 DATA_SUFFIXES = {".db", ".sqlite", ".sqlite3", ".log", ".pem", ".key", ".p12", ".pfx"}
 
 
@@ -24,15 +36,28 @@ def safe_path(name):
     if not isinstance(name, str) or not name or len(name) > 240:
         return False
     parts = name.split("/")
-    return (not PurePosixPath(name).is_absolute() and all(
-        part not in ("", ".", "..") and not part.endswith((" ", "."))
+    return not PurePosixPath(name).is_absolute() and all(
+        part not in ("", ".", "..")
+        and not part.endswith((" ", "."))
         and not re.search(r'[\\:\x00-\x1f\x7f<>"|?*]', part)
-        and part.split(".")[0].upper() not in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(10)), *(f"LPT{i}" for i in range(10))}
-        for part in parts))
+        and part.split(".")[0].upper()
+        not in {
+            "CON",
+            "PRN",
+            "AUX",
+            "NUL",
+            *(f"COM{i}" for i in range(10)),
+            *(f"LPT{i}" for i in range(10)),
+        }
+        for part in parts
+    )
 
 
 def excluded(name):
-    return any(p.lower() in EXCLUDED or p.lower().startswith(".env") for p in name.split("/")) or Path(name).suffix.lower() in DATA_SUFFIXES
+    return (
+        any(p.lower() in EXCLUDED or p.lower().startswith(".env") for p in name.split("/"))
+        or Path(name).suffix.lower() in DATA_SUFFIXES
+    )
 
 
 def blob_sha(content):
@@ -49,12 +74,16 @@ class Snapshot:
     skipped: int = 0
 
 
-def fetch_snapshot(github, token, repository, base_sha, root, *, cancelled=lambda: False, timeout=120):
+def fetch_snapshot(
+    github, token, repository, base_sha, root, *, cancelled=lambda: False, timeout=120
+):
     started = time.monotonic()
 
     def check():
         if cancelled() or time.monotonic() - started > timeout:
-            raise AnalysisError("source_timeout", "소스 준비 시간이 초과되거나 작업이 중단됐습니다.")
+            raise AnalysisError(
+                "source_timeout", "소스 준비 시간이 초과되거나 작업이 중단됐습니다."
+            )
 
     if not SHA.fullmatch(base_sha):
         raise AnalysisError("invalid_sha", "기준 커밋을 확인할 수 없습니다.")
@@ -81,7 +110,9 @@ def fetch_snapshot(github, token, repository, base_sha, root, *, cancelled=lambd
         if entry.get("type") == "tree":
             continue
         if entry.get("type") != "blob" or entry.get("mode") not in ("100644", "100755"):
-            raise AnalysisError("unsafe_source_type", "심볼릭 링크·서브모듈은 분석 대상에서 지원하지 않습니다.")
+            raise AnalysisError(
+                "unsafe_source_type", "심볼릭 링크·서브모듈은 분석 대상에서 지원하지 않습니다."
+            )
         size, sha = entry.get("size"), entry.get("sha", "")
         if type(size) is not int or size < 0 or size > MAX_FILE_BYTES or not SHA.fullmatch(sha):
             raise AnalysisError("source_too_large", "파일 크기 또는 소스 식별자를 확인해 주세요.")
@@ -91,7 +122,10 @@ def fetch_snapshot(github, token, repository, base_sha, root, *, cancelled=lambd
         metadata[name] = {"sha": sha, "mode": entry["mode"]}
         blob = github.blob(token, repository, sha)
         try:
-            if blob.get("encoding") != "base64" or len(blob.get("content", "")) > MAX_FILE_BYTES * 2:
+            if (
+                blob.get("encoding") != "base64"
+                or len(blob.get("content", "")) > MAX_FILE_BYTES * 2
+            ):
                 raise ValueError()
             raw = base64.b64decode("".join(blob["content"].split()), validate=True)
             if len(raw) != size or blob_sha(raw) != sha:

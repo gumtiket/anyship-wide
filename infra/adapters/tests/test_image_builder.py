@@ -5,11 +5,10 @@ import threading
 from pathlib import Path
 
 import pytest
+from fakes import Log
 
 from anyship_adapters import image_builder as ib
 from anyship_adapters.image_builder import MAX_LINE, BuildError, BuiltImage, ImageBuilder
-
-from fakes import Log
 
 APP, SHA = "todo", "abc1234"
 IMAGE = f"{APP}:{SHA}"
@@ -26,9 +25,19 @@ def clean_locks():
 @pytest.fixture
 def source(tmp_path):
     root = tmp_path / "src"
-    for name, text in {"Dockerfile": "FROM scratch\n", "app.py": "print(1)", ".gitignore": "x", ".git/config": "secret-remote",
-                       ".env": "TOKEN=abc", ".env.local": "X=1", ".env.production": "Y=2", "sub/keep.txt": "k",
-                       "sub/.env": "Z=3", "sub/.git/HEAD": "ref", "docker/Dockerfile.prod": "FROM scratch\n"}.items():
+    for name, text in {
+        "Dockerfile": "FROM scratch\n",
+        "app.py": "print(1)",
+        ".gitignore": "x",
+        ".git/config": "secret-remote",
+        ".env": "TOKEN=abc",
+        ".env.local": "X=1",
+        ".env.production": "Y=2",
+        "sub/keep.txt": "k",
+        "sub/.env": "Z=3",
+        "sub/.git/HEAD": "ref",
+        "docker/Dockerfile.prod": "FROM scratch\n",
+    }.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
@@ -65,9 +74,17 @@ class Popen:
     def __call__(self, args, **kwargs):
         self.calls.append((list(args), kwargs))
         context = Path(args[-1])
-        files = sorted(p.relative_to(context).as_posix() for p in context.rglob("*") if p.is_file() or p.is_symlink())
-        links = sorted(p.relative_to(context).as_posix() for p in context.rglob("*") if p.is_symlink())
-        self.snapshots.append({"context": context, "work": context.parent, "files": files, "links": links})
+        files = sorted(
+            p.relative_to(context).as_posix()
+            for p in context.rglob("*")
+            if p.is_file() or p.is_symlink()
+        )
+        links = sorted(
+            p.relative_to(context).as_posix() for p in context.rglob("*") if p.is_symlink()
+        )
+        self.snapshots.append(
+            {"context": context, "work": context.parent, "files": files, "links": links}
+        )
         child = self.script(list(args))
         self.children.append(child)
         return child
@@ -77,13 +94,21 @@ class Run:
     """docker image inspect/ls/rm를 흉내 낸다."""
 
     def __init__(self, inspect="sha256:abc123 amd64\n", listing="", remove_ok=True, inspect_code=0):
-        self.inspect, self.listing, self.remove_ok, self.inspect_code, self.calls = inspect, listing, remove_ok, inspect_code, []
+        self.inspect, self.listing, self.remove_ok, self.inspect_code, self.calls = (
+            inspect,
+            listing,
+            remove_ok,
+            inspect_code,
+            [],
+        )
 
     def __call__(self, args, **kwargs):
         self.calls.append(list(args))
         sub = args[2] if len(args) > 2 and args[1] == "image" else ""
         if sub == "inspect":
-            return subprocess.CompletedProcess(args, self.inspect_code, stdout=self.inspect, stderr="")
+            return subprocess.CompletedProcess(
+                args, self.inspect_code, stdout=self.inspect, stderr=""
+            )
         if sub == "ls":
             return subprocess.CompletedProcess(args, 0, stdout=self.listing, stderr="")
         return subprocess.CompletedProcess(args, 0 if self.remove_ok else 1, stdout="", stderr="")
@@ -108,8 +133,23 @@ def make_link(link: Path, target: Path):
 
 
 # --- 입력 검증 ----------------------------------------------------------------------------------
-@pytest.mark.parametrize("app, sha", [("Bad Name", SHA), ("ab", SHA), ("1abc", SHA), ("", SHA), ("a" * 64, SHA), ("todo;rm", SHA),
-                                       (APP, "xyz"), (APP, "abc12"), (APP, "A" * 7), (APP, "g" * 7), (APP, "a" * 41), (APP, "")])
+@pytest.mark.parametrize(
+    "app, sha",
+    [
+        ("Bad Name", SHA),
+        ("ab", SHA),
+        ("1abc", SHA),
+        ("", SHA),
+        ("a" * 64, SHA),
+        ("todo;rm", SHA),
+        (APP, "xyz"),
+        (APP, "abc12"),
+        (APP, "A" * 7),
+        (APP, "g" * 7),
+        (APP, "a" * 41),
+        (APP, ""),
+    ],
+)
 def test_a_bad_app_name_or_commit_is_refused_before_anything_runs(source, app, sha):
     popen = Popen()
     expect_error(lambda: builder(popen).build(source, app, sha, Log()), "invalid_build_input")
@@ -117,10 +157,25 @@ def test_a_bad_app_name_or_commit_is_refused_before_anything_runs(source, app, s
 
 
 # "sub/../Dockerfile"은 소스 안에 머무는 경로지만 `..`가 들어 있어서 거부한다(경로 해석에 기대지 않는 정책).
-@pytest.mark.parametrize("dockerfile", ["", "../Dockerfile", "sub/../Dockerfile", "/etc/passwd", "a/../../x", "sub\\x", "missing", "sub"])
+@pytest.mark.parametrize(
+    "dockerfile",
+    [
+        "",
+        "../Dockerfile",
+        "sub/../Dockerfile",
+        "/etc/passwd",
+        "a/../../x",
+        "sub\\x",
+        "missing",
+        "sub",
+    ],
+)
 def test_a_dockerfile_that_is_not_a_regular_file_inside_the_source_is_refused(source, dockerfile):
     popen = Popen()
-    expect_error(lambda: builder(popen).build(source, APP, SHA, Log(), dockerfile=dockerfile), "invalid_build_input")
+    expect_error(
+        lambda: builder(popen).build(source, APP, SHA, Log(), dockerfile=dockerfile),
+        "invalid_build_input",
+    )
     assert popen.calls == []
 
 
@@ -143,13 +198,21 @@ def test_a_dockerfile_that_is_a_link_is_refused(source, tmp_path):
 def test_git_and_env_files_never_reach_the_build_context_at_any_depth(source):
     popen = Popen()
     builder(popen).build(source, APP, SHA, Log())
-    assert popen.snapshots[0]["files"] == [".gitignore", "Dockerfile", "app.py", "docker/Dockerfile.prod", "sub/keep.txt"]
+    assert popen.snapshots[0]["files"] == [
+        ".gitignore",
+        "Dockerfile",
+        "app.py",
+        "docker/Dockerfile.prod",
+        "sub/keep.txt",
+    ]
 
 
 def test_the_original_source_is_left_untouched(source):
     before = sorted(p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file())
     builder().build(source, APP, SHA, Log())
-    assert sorted(p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file()) == before
+    assert (
+        sorted(p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file()) == before
+    )
 
 
 def test_links_are_copied_as_links_and_never_followed(source, tmp_path):
@@ -189,11 +252,19 @@ def test_the_docker_command_targets_the_amd64_image_with_the_dockerfile_inside_t
     args, context = popen.calls[0][0], popen.snapshots[0]["context"]
     assert args[:2] == ["docker", "build"] and ["--platform", "linux/amd64"] == args[2:4]
     assert args[args.index("--tag") + 1] == IMAGE
-    assert args[args.index("--file") + 1] == str(context / "docker" / "Dockerfile.prod") and args[-1] == str(context)
+    assert args[args.index("--file") + 1] == str(context / "docker" / "Dockerfile.prod") and args[
+        -1
+    ] == str(context)
 
 
 def test_the_process_gets_no_service_credentials_and_cannot_wait_for_input(source, monkeypatch):
-    for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE", "GITHUB_TOKEN", "APP_TOKEN_KEY"):
+    for name in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_PROFILE",
+        "GITHUB_TOKEN",
+        "APP_TOKEN_KEY",
+    ):
         monkeypatch.setenv(name, "service-value")
     popen = Popen()
     builder(popen).build(source, APP, SHA, Log())
@@ -203,7 +274,9 @@ def test_the_process_gets_no_service_credentials_and_cannot_wait_for_input(sourc
 
 def test_progress_lines_are_forwarded_with_secrets_masked_and_blank_lines_dropped(source):
     log = Log()
-    builder(Popen(lambda args: Child(["", f"cloning with {FAKE_TOKEN}", "  ", "done"]))).build(source, APP, SHA, log)
+    builder(Popen(lambda args: Child(["", f"cloning with {FAKE_TOKEN}", "  ", "done"]))).build(
+        source, APP, SHA, log
+    )
     assert FAKE_TOKEN not in log.text() and "***" in log.text()
     messages = [(e.step, e.name, e.message) for e in log.events]
     assert messages[0][:2] == (1, "빌드 준비") and (2, "이미지 빌드", "done") in messages
@@ -216,11 +289,22 @@ def test_a_very_long_line_is_truncated(source):
     assert max(len(e.message) for e in log.events) <= MAX_LINE
 
 
-@pytest.mark.parametrize("lines, code, retryable", [
-    (["Step 1", "ERROR: pip failed"], "docker_build_failed", False),
-    (["ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock"], "docker_unavailable", True),
-    (["permission denied while trying to connect to the Docker daemon socket"], "docker_unavailable", True),
-])
+@pytest.mark.parametrize(
+    "lines, code, retryable",
+    [
+        (["Step 1", "ERROR: pip failed"], "docker_build_failed", False),
+        (
+            ["ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock"],
+            "docker_unavailable",
+            True,
+        ),
+        (
+            ["permission denied while trying to connect to the Docker daemon socket"],
+            "docker_unavailable",
+            True,
+        ),
+    ],
+)
 def test_a_failed_build_is_reported_with_a_code_and_the_masked_tail(source, lines, code, retryable):
     popen = Popen(lambda args: Child(lines + [f"token {FAKE_TOKEN}"], 1))
     error = expect_error(lambda: builder(popen).build(source, APP, SHA, Log()), code)
@@ -230,8 +314,12 @@ def test_a_failed_build_is_reported_with_a_code_and_the_masked_tail(source, line
 
 def test_only_the_last_lines_of_a_failed_build_are_kept(source):
     popen = Popen(lambda args: Child([f"line {n}" for n in range(100)], 1))
-    error = expect_error(lambda: builder(popen).build(source, APP, SHA, Log()), "docker_build_failed")
-    assert error.tail.splitlines()[-1] == "line 99" and len(error.tail.splitlines()) == ib.TAIL_LINES
+    error = expect_error(
+        lambda: builder(popen).build(source, APP, SHA, Log()), "docker_build_failed"
+    )
+    assert (
+        error.tail.splitlines()[-1] == "line 99" and len(error.tail.splitlines()) == ib.TAIL_LINES
+    )
 
 
 def test_a_missing_docker_binary_is_reported(source):
@@ -249,7 +337,9 @@ def test_a_build_that_takes_too_long_is_killed_and_reported(source):
         children.append(child)
         return child
 
-    error = expect_error(lambda: builder(Popen(script), timeout=0.1).build(source, APP, SHA, Log()), "build_timeout")
+    error = expect_error(
+        lambda: builder(Popen(script), timeout=0.1).build(source, APP, SHA, Log()), "build_timeout"
+    )
     assert error.error.retryable and children[-1].killed
     builder().build(source, APP, SHA, Log())  # 시간 초과 뒤에도 같은 빌드를 다시 시작할 수 있다
 
@@ -277,7 +367,10 @@ def test_the_same_app_and_commit_cannot_be_built_twice_at_once(source):
 
 
 def test_a_failed_build_releases_the_lock(source):
-    expect_error(lambda: builder(Popen(lambda args: Child([], 1))).build(source, APP, SHA, Log()), "docker_build_failed")
+    expect_error(
+        lambda: builder(Popen(lambda args: Child([], 1))).build(source, APP, SHA, Log()),
+        "docker_build_failed",
+    )
     builder().build(source, APP, SHA, Log())
 
 
@@ -303,24 +396,34 @@ def test_the_result_names_the_image_and_its_id(source):
 
 
 def test_an_image_that_is_not_amd64_is_rejected(source):
-    expect_error(lambda: builder(run=Run(inspect="sha256:abc arm64\n")).build(source, APP, SHA, Log()), "wrong_architecture")
+    expect_error(
+        lambda: builder(run=Run(inspect="sha256:abc arm64\n")).build(source, APP, SHA, Log()),
+        "wrong_architecture",
+    )
 
 
-@pytest.mark.parametrize("run", [Run(inspect_code=1), Run(inspect=""), Run(inspect="only-one-token\n")])
+@pytest.mark.parametrize(
+    "run", [Run(inspect_code=1), Run(inspect=""), Run(inspect="only-one-token\n")]
+)
 def test_an_image_that_cannot_be_confirmed_is_reported(source, run):
     expect_error(lambda: builder(run=run).build(source, APP, SHA, Log()), "docker_build_failed")
 
 
 # --- 오래된 이미지 정리 -------------------------------------------------------------------------
-LISTING = ("aaaaaaa\t2026-10-01 10:00:00 +0000 UTC\nbbbbbbb\t2026-10-03 10:00:00 +0000 UTC\n"
-           "ccccccc\t2026-10-02 10:00:00 +0000 UTC\nlatest\t2026-10-09 10:00:00 +0000 UTC\n"
-           "ddddddd\t2026-10-04 10:00:00 +0000 UTC\n")
+LISTING = (
+    "aaaaaaa\t2026-10-01 10:00:00 +0000 UTC\nbbbbbbb\t2026-10-03 10:00:00 +0000 UTC\n"
+    "ccccccc\t2026-10-02 10:00:00 +0000 UTC\nlatest\t2026-10-09 10:00:00 +0000 UTC\n"
+    "ddddddd\t2026-10-04 10:00:00 +0000 UTC\n"
+)
 
 
 def test_prune_keeps_the_newest_images_and_never_touches_other_tags():
     run = Run(listing=LISTING)
     removed = builder(run=run).prune(APP, keep=2)
-    assert removed == [f"{APP}:ccccccc", f"{APP}:aaaaaaa"]  # 가장 최근 둘(ddddddd, bbbbbbb)만 남는다
+    assert removed == [
+        f"{APP}:ccccccc",
+        f"{APP}:aaaaaaa",
+    ]  # 가장 최근 둘(ddddddd, bbbbbbb)만 남는다
     assert all("latest" not in " ".join(call) for call in run.calls if call[2] == "rm")
     assert run.calls[0][run.calls[0].index("--filter") + 1] == f"reference={APP}"
 
@@ -344,12 +447,12 @@ def test_prune_refuses_bad_arguments(app, keep):
 
 
 # --- 진짜 하위 프로세스 -------------------------------------------------------------------------
-FAKE_DOCKER = """import os, sys
+FAKE_DOCKER = f"""import os, sys
 print("sub:", sys.argv[1])
 print("aws secret in env:", os.environ.get("AWS_SECRET_ACCESS_KEY"))
 print("stdin:", repr(sys.stdin.read()))
-print("token:", "%s")
-""" % FAKE_TOKEN
+print("token:", "{FAKE_TOKEN}")
+"""
 
 
 def test_it_works_with_a_real_subprocess(source, tmp_path, monkeypatch):
@@ -365,5 +468,9 @@ def test_it_works_with_a_real_subprocess(source, tmp_path, monkeypatch):
     log = Log()
     built = builder(real).build(source, APP, SHA, log)
     assert built.image == IMAGE
-    assert "sub: build" in log.text() and "aws secret in env: None" in log.text() and "stdin: ''" in log.text()
+    assert (
+        "sub: build" in log.text()
+        and "aws secret in env: None" in log.text()
+        and "stdin: ''" in log.text()
+    )
     assert FAKE_TOKEN not in log.text() and "token: ***" in log.text()

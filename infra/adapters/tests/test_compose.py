@@ -2,11 +2,10 @@ import re
 
 import pytest
 import yaml
+from specs import GENERATED, HAND_WRITTEN, make
 
 from anyship_adapters.compose import RenderedStack, render_stack
 from anyship_adapters.spec import SpecError
-
-from specs import GENERATED, HAND_WRITTEN, make
 
 TAG = "3f2a9c1"
 HOST = "todo.demo.onprem.anyship.cloud"  # 주소는 어댑터가 정해서 넘긴다
@@ -81,8 +80,10 @@ def test_web_container_is_locked_down():
 def test_app_waits_for_a_healthy_database_and_gets_its_address_from_compose():
     data = compose(render())
     assert data["services"]["web"]["depends_on"] == {"db": {"condition": "service_healthy"}}
-    assert data["services"]["web"]["environment"]["DATABASE_URL"] == \
-        "postgresql://app:${POSTGRES_PASSWORD}@db:5432/app"
+    assert (
+        data["services"]["web"]["environment"]["DATABASE_URL"]
+        == "postgresql://app:${POSTGRES_PASSWORD}@db:5432/app"
+    )
     assert data["services"]["web"]["environment"]["PORT"] == "8080"
     assert data["services"]["db"]["healthcheck"]["test"][0] == "CMD-SHELL"
     assert "db-data" in data["volumes"]
@@ -144,17 +145,30 @@ def test_user_provided_secrets_are_written_to_app_env_only():
 
 
 def test_compose_yaml_never_contains_a_secret_value():
-    stack = render(make(env=[{"name": "API_KEY", "secret": True}, {"name": "SECRET_KEY", "secret": True, "generate": True}]),
-                   secrets={"API_KEY": "s3cr3t-value-123"})
-    secret_key = next(l for l in stack.app_env.splitlines() if l.startswith("SECRET_KEY")).split("'")[1]
+    stack = render(
+        make(
+            env=[
+                {"name": "API_KEY", "secret": True},
+                {"name": "SECRET_KEY", "secret": True, "generate": True},
+            ]
+        ),
+        secrets={"API_KEY": "s3cr3t-value-123"},
+    )
+    secret_key = next(
+        line for line in stack.app_env.splitlines() if line.startswith("SECRET_KEY")
+    ).split("'")[1]
     password = stack.compose_env.split("'")[1]
     for secret in ("s3cr3t-value-123", secret_key, password):
         assert secret not in stack.compose_yaml
 
 
 def test_missing_user_secret_is_reported_by_name():
-    error = rejected(make(env=[{"name": "API_KEY", "secret": True}, {"name": "OTHER", "secret": True}]))
-    assert error.code == "missing_secret" and "API_KEY" in error.message and "OTHER" in error.message
+    error = rejected(
+        make(env=[{"name": "API_KEY", "secret": True}, {"name": "OTHER", "secret": True}])
+    )
+    assert (
+        error.code == "missing_secret" and "API_KEY" in error.message and "OTHER" in error.message
+    )
 
 
 def test_undeclared_secret_inputs_are_ignored_with_a_warning_that_has_no_values():
@@ -179,11 +193,22 @@ def test_image_tag_must_be_a_commit_sha(tag):
     assert rejected(image_tag=tag).code == "invalid_image_tag"
 
 
-@pytest.mark.parametrize("host", [
-    "", "todo", "Todo.example.com", "todo..example.com", "-a.example.com", "a b.example.com",
-    "todo.example.com/x", "a`.example.com", "todo.example.com:8080", "a" * 64 + ".example.com",
-    ("a." * 130) + "com",
-])
+@pytest.mark.parametrize(
+    "host",
+    [
+        "",
+        "todo",
+        "Todo.example.com",
+        "todo..example.com",
+        "-a.example.com",
+        "a b.example.com",
+        "todo.example.com/x",
+        "a`.example.com",
+        "todo.example.com:8080",
+        "a" * 64 + ".example.com",
+        ("a." * 130) + "com",
+    ],
+)
 def test_host_must_be_a_plain_lowercase_domain_name(host):
     assert rejected(host=host).code == "invalid_host"
 
@@ -193,8 +218,10 @@ def test_spec_errors_pass_through():
 
 
 # --- 외부 DB(EC2 세트의 공유 RDS) -----------------------------------------------------------------
-DB_URL = ("postgresql://app_todo:a1b2c3d4e5f6a7b8c9d0e1f2@anyship-test-db.abc.ap-northeast-2.rds.amazonaws.com"
-          ":5432/app_todo?sslmode=require")
+DB_URL = (
+    "postgresql://app_todo:a1b2c3d4e5f6a7b8c9d0e1f2@anyship-test-db.abc.ap-northeast-2.rds.amazonaws.com"
+    ":5432/app_todo?sslmode=require"
+)
 
 
 def test_an_external_database_replaces_the_db_container_and_the_closed_network():
@@ -202,15 +229,21 @@ def test_an_external_database_replaces_the_db_container_and_the_closed_network()
     config = compose(stack)
     assert "db" not in config["services"] and "volumes" not in config
     # 앱이 VPC의 RDS에 닿아야 하므로 인터넷이 막힌 앱 전용 네트워크를 만들지 않는다.
-    assert config["services"]["web"]["networks"] == ["traefik"] and list(config["networks"]) == ["traefik"]
+    assert config["services"]["web"]["networks"] == ["traefik"] and list(config["networks"]) == [
+        "traefik"
+    ]
     assert "depends_on" not in config["services"]["web"]
-    assert stack.compose_env == "" and stack.generated == ("SECRET_KEY",)  # DB 비밀번호는 만들지 않는다
+    assert stack.compose_env == "" and stack.generated == (
+        "SECRET_KEY",
+    )  # DB 비밀번호는 만들지 않는다
 
 
 def test_the_external_database_address_is_written_only_to_the_secret_env_file():
     stack = render(database_url=DB_URL)
     assert f"DATABASE_URL='{DB_URL}'" in stack.app_env.splitlines()
-    assert "rds.amazonaws.com" not in stack.compose_yaml and "DATABASE_URL" not in stack.compose_yaml
+    assert (
+        "rds.amazonaws.com" not in stack.compose_yaml and "DATABASE_URL" not in stack.compose_yaml
+    )
 
 
 def test_without_an_external_database_the_db_container_is_still_created():
@@ -219,16 +252,19 @@ def test_without_an_external_database_the_db_container_is_still_created():
     assert config["services"]["web"]["networks"] == ["traefik", "internal"]
 
 
-@pytest.mark.parametrize("url", [
-    DB_URL.replace(":5432/", ":99999999/"),  # 포트가 숫자 4~5자리가 아님
-    DB_URL.replace("?sslmode=require", ""),  # SSL 필수가 빠짐
-    DB_URL.replace("?sslmode=require", "?sslmode=prefer"),
-    DB_URL.replace("postgresql://", "mysql://"),
-    DB_URL.replace("a1b2c3d4e5f6a7b8c9d0e1f2", "short"),
-    DB_URL.replace("app_todo:", "APP:"),  # 대문자 계정
-    DB_URL + "'; echo hacked",  # 환경 파일의 따옴표를 닫으려는 시도
-    DB_URL + "\nSECRET_KEY=x",  # 줄을 바꿔 다른 변수를 끼워 넣으려는 시도
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        DB_URL.replace(":5432/", ":99999999/"),  # 포트가 숫자 4~5자리가 아님
+        DB_URL.replace("?sslmode=require", ""),  # SSL 필수가 빠짐
+        DB_URL.replace("?sslmode=require", "?sslmode=prefer"),
+        DB_URL.replace("postgresql://", "mysql://"),
+        DB_URL.replace("a1b2c3d4e5f6a7b8c9d0e1f2", "short"),
+        DB_URL.replace("app_todo:", "APP:"),  # 대문자 계정
+        DB_URL + "'; echo hacked",  # 환경 파일의 따옴표를 닫으려는 시도
+        DB_URL + "\nSECRET_KEY=x",  # 줄을 바꿔 다른 변수를 끼워 넣으려는 시도
+    ],
+)
 def test_a_malformed_external_database_address_is_refused(url):
     assert rejected(database_url=url).code == "invalid_env_value"
 

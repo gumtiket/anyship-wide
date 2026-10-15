@@ -55,14 +55,18 @@ def test_the_same_content_gives_the_same_sha_even_in_another_place(tmp_path):
     assert sha(tmp_path / "one") == sha(tmp_path / "two") == sha(tmp_path / "one")
 
 
-@pytest.mark.parametrize("change", [
-    lambda f: (f / "app" / "main.py").write_text("print('changed')\n"),
-    lambda f: (f / "app" / "extra.py").write_text(""),
-    lambda f: (f / "app" / "main.py").unlink(),
-    lambda f: (f / "app" / "main.py").rename(f / "app" / "renamed.py"),
-    lambda f: (f / "Dockerfile").write_text("FROM python:3.13-slim\n"),
-    lambda f: (f / "deploy-spec.yaml").write_text("app: todo\nport: 9090\n"),
-], ids=["edit", "add", "delete", "rename", "dockerfile", "spec"])
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda f: (f / "app" / "main.py").write_text("print('changed')\n"),
+        lambda f: (f / "app" / "extra.py").write_text(""),
+        lambda f: (f / "app" / "main.py").unlink(),
+        lambda f: (f / "app" / "main.py").rename(f / "app" / "renamed.py"),
+        lambda f: (f / "Dockerfile").write_text("FROM python:3.13-slim\n"),
+        lambda f: (f / "deploy-spec.yaml").write_text("app: todo\nport: 9090\n"),
+    ],
+    ids=["edit", "add", "delete", "rename", "dockerfile", "spec"],
+)
 def test_any_change_that_reaches_the_image_changes_the_sha(tmp_path, change):
     folder = make(tmp_path)
     before = sha(tmp_path)
@@ -106,8 +110,18 @@ def test_a_changed_link_target_changes_the_sha_without_following_it(tmp_path):
     assert sha(tmp_path) != before
 
 
-@pytest.mark.parametrize("ignored", [".git/config", ".git/objects/ab/cd", ".env", ".env.production", "app/.env",
-                                     ".envs/secret", "app/__pycache__/main.pyc"])
+@pytest.mark.parametrize(
+    "ignored",
+    [
+        ".git/config",
+        ".git/objects/ab/cd",
+        ".env",
+        ".env.production",
+        "app/.env",
+        ".envs/secret",
+        "app/__pycache__/main.pyc",
+    ],
+)
 def test_files_the_builder_does_not_copy_do_not_change_the_sha(tmp_path, ignored):
     folder = make(tmp_path)
     before = sha(tmp_path)
@@ -118,8 +132,20 @@ def test_files_the_builder_does_not_copy_do_not_change_the_sha(tmp_path, ignored
 
 
 # --- 이름과 위치 --------------------------------------------------------------------------
-@pytest.mark.parametrize("name", ["owner/..", "owner/.", "owner/", "", "owner/a b", "owner/a;b", "owner/.hidden",
-                                  "owner/a\\b", "owner/" + "a" * 101])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "owner/..",
+        "owner/.",
+        "owner/",
+        "",
+        "owner/a b",
+        "owner/a;b",
+        "owner/.hidden",
+        "owner/a\\b",
+        "owner/" + "a" * 101,
+    ],
+)
 def test_a_repository_name_that_is_not_a_safe_folder_name_is_refused(tmp_path, name):
     make(tmp_path)
     with pytest.raises(SourceError) as caught:
@@ -248,15 +274,22 @@ def test_error_messages_do_not_contain_server_paths(tmp_path):
     with pytest.raises(SourceError) as caught:
         LocalFolderSource(tmp_path).fetch("owner/todo")
     messages.append(caught.value.message)
-    assert all(str(tmp_path) not in message and tmp_path.name not in message for message in messages)
+    assert all(
+        str(tmp_path) not in message and tmp_path.name not in message for message in messages
+    )
 
 
 def test_the_source_folder_is_only_read(tmp_path):
     folder = make(tmp_path, extra={".env": "SECRET=1\n"})
 
     def snapshot():
-        return {str(p.relative_to(folder)): (p.stat().st_mtime_ns, p.read_bytes() if p.is_file() else None)
-                for p in sorted(folder.rglob("*"))}
+        return {
+            str(p.relative_to(folder)): (
+                p.stat().st_mtime_ns,
+                p.read_bytes() if p.is_file() else None,
+            )
+            for p in sorted(folder.rglob("*"))
+        }
 
     before = snapshot()
     LocalFolderSource(tmp_path).fetch("owner/todo")
@@ -273,11 +306,20 @@ class FakeClone:
 
     def __init__(self, files=None, error=None):
         self.calls, self.error = [], error
-        self.files = {"Dockerfile": "FROM python:3.12-slim\n", "deploy-spec.yaml": SPEC, "app/main.py": "print('hi')\n"} \
-            if files is None else files
+        self.files = (
+            {
+                "Dockerfile": "FROM python:3.12-slim\n",
+                "deploy-spec.yaml": SPEC,
+                "app/main.py": "print('hi')\n",
+            }
+            if files is None
+            else files
+        )
 
     def __call__(self, repo, branch, destination, token, depth=None):
-        self.calls.append(dict(repo=repo, branch=branch, destination=destination, token=token, depth=depth))
+        self.calls.append(
+            dict(repo=repo, branch=branch, destination=destination, token=token, depth=depth)
+        )
         if self.error:
             raise self.error
         for relative, content in self.files.items():
@@ -301,14 +343,23 @@ def leftovers(tmp_path):
     return sorted(p.name for p in work.iterdir()) if work.is_dir() else []
 
 
-def test_the_branch_is_cloned_shallowly_with_the_users_token_and_the_commit_becomes_the_tag(tmp_path):
+def test_the_branch_is_cloned_shallowly_with_the_users_token_and_the_commit_becomes_the_tag(
+    tmp_path,
+):
     provider, clone = github(tmp_path)
     result = fetch(provider)
     (call,) = clone.calls
-    assert (call["repo"], call["branch"], call["token"], call["depth"]) == ("owner/todo-app2", "main", TOKEN, 1)
+    assert (call["repo"], call["branch"], call["token"], call["depth"]) == (
+        "owner/todo-app2",
+        "main",
+        TOKEN,
+        1,
+    )
     assert result.commit_sha == COMMIT[:12] and re.fullmatch(r"[0-9a-f]{12}", result.commit_sha)
     assert result.spec == {"app": "todo", "port": 8080} and result.path == call["destination"]
-    assert result.path.is_relative_to((tmp_path / "work").resolve()) or str(result.path).startswith(str(tmp_path / "work"))
+    assert result.path.is_relative_to((tmp_path / "work").resolve()) or str(result.path).startswith(
+        str(tmp_path / "work")
+    )
 
 
 def test_cleanup_removes_the_received_source_and_leaves_the_workspace(tmp_path):
@@ -334,27 +385,64 @@ def test_the_token_is_not_part_of_the_result(tmp_path):
     assert TOKEN not in repr(result) and TOKEN not in str(result.spec)
 
 
-@pytest.mark.parametrize("repo", ["", "todo", "owner/", "/todo", "owner/..", "../todo", "owner/a b", "a/b/c", "owner/a;b",
-                                  "owner/" + "a" * 101, "owner/todo\n"])
+@pytest.mark.parametrize(
+    "repo",
+    [
+        "",
+        "todo",
+        "owner/",
+        "/todo",
+        "owner/..",
+        "../todo",
+        "owner/a b",
+        "a/b/c",
+        "owner/a;b",
+        "owner/" + "a" * 101,
+        "owner/todo\n",
+    ],
+)
 def test_an_invalid_repository_name_is_refused_before_cloning(tmp_path, repo):
     provider, clone = github(tmp_path)
     with pytest.raises(SourceError) as caught:
         fetch(provider, repo=repo)
-    assert caught.value.code == "source_not_found" and clone.calls == [] and leftovers(tmp_path) == []
+    assert (
+        caught.value.code == "source_not_found" and clone.calls == [] and leftovers(tmp_path) == []
+    )
 
 
-@pytest.mark.parametrize("branch", ["main", "feature/55/deployment", "release-1.2", "v1.0_rc", "a" * 255])
+@pytest.mark.parametrize(
+    "branch", ["main", "feature/55/deployment", "release-1.2", "v1.0_rc", "a" * 255]
+)
 def test_ordinary_branch_names_are_accepted(tmp_path, branch):
     provider, clone = github(tmp_path)
     assert fetch(provider, branch=branch) and clone.calls[0]["branch"] == branch
 
 
-@pytest.mark.parametrize("branch", ["", "-x", "--upload-pack=evil", "/x", "a..b", "a b", "x;rm", "a/", "x.lock", "feat\n", "a" * 256])
-def test_a_branch_name_that_could_be_an_option_or_is_malformed_is_refused_before_cloning(tmp_path, branch):
+@pytest.mark.parametrize(
+    "branch",
+    [
+        "",
+        "-x",
+        "--upload-pack=evil",
+        "/x",
+        "a..b",
+        "a b",
+        "x;rm",
+        "a/",
+        "x.lock",
+        "feat\n",
+        "a" * 256,
+    ],
+)
+def test_a_branch_name_that_could_be_an_option_or_is_malformed_is_refused_before_cloning(
+    tmp_path, branch
+):
     provider, clone = github(tmp_path)
     with pytest.raises(SourceError) as caught:
         fetch(provider, branch=branch)
-    assert caught.value.code == "source_not_found" and clone.calls == [] and leftovers(tmp_path) == []
+    assert (
+        caught.value.code == "source_not_found" and clone.calls == [] and leftovers(tmp_path) == []
+    )
 
 
 @pytest.mark.parametrize("token", [None, ""])
@@ -362,17 +450,34 @@ def test_a_missing_token_is_reported_and_nothing_is_cloned(tmp_path, token):
     provider, clone = github(tmp_path)
     with pytest.raises(SourceError) as caught:
         fetch(provider, token=token)
-    assert caught.value.code == "github_token_missing" and clone.calls == [] and leftovers(tmp_path) == []
+    assert (
+        caught.value.code == "github_token_missing"
+        and clone.calls == []
+        and leftovers(tmp_path) == []
+    )
 
 
-@pytest.mark.parametrize("error", [
-    subprocess.CalledProcessError(128, ["git", "clone"], stderr=f"fatal: could not read from https://x-access-token:{TOKEN}@github.com"),
-    subprocess.TimeoutExpired(["git", "clone"], 120), OSError(f"disk full {TOKEN}")])
+@pytest.mark.parametrize(
+    "error",
+    [
+        subprocess.CalledProcessError(
+            128,
+            ["git", "clone"],
+            stderr=f"fatal: could not read from https://x-access-token:{TOKEN}@github.com",
+        ),
+        subprocess.TimeoutExpired(["git", "clone"], 120),
+        OSError(f"disk full {TOKEN}"),
+    ],
+)
 def test_a_failed_clone_is_reported_without_gits_output_and_leaves_nothing_behind(tmp_path, error):
     provider, _ = github(tmp_path, FakeClone(error=error))
     with pytest.raises(SourceError) as caught:
         fetch(provider)
-    assert caught.value.code == "source_fetch_failed" and TOKEN not in caught.value.message and "github.com" not in caught.value.message
+    assert (
+        caught.value.code == "source_fetch_failed"
+        and TOKEN not in caught.value.message
+        and "github.com" not in caught.value.message
+    )
     assert leftovers(tmp_path) == []
 
 
@@ -391,10 +496,15 @@ def test_a_revision_that_is_not_a_full_commit_hash_is_refused(tmp_path, revision
     assert caught.value.code == "source_fetch_failed" and leftovers(tmp_path) == []
 
 
-@pytest.mark.parametrize("files, code", [
-    ({"deploy-spec.yaml": SPEC}, "source_incomplete"), ({"Dockerfile": "FROM x\n"}, "source_incomplete"),
-    ({"Dockerfile": "FROM x\n", "deploy-spec.yaml": "- a\n- b\n"}, "source_incomplete"),
-    ({"Dockerfile": "FROM x\n", "deploy-spec.yaml": "a: [unclosed"}, "source_incomplete")])
+@pytest.mark.parametrize(
+    "files, code",
+    [
+        ({"deploy-spec.yaml": SPEC}, "source_incomplete"),
+        ({"Dockerfile": "FROM x\n"}, "source_incomplete"),
+        ({"Dockerfile": "FROM x\n", "deploy-spec.yaml": "- a\n- b\n"}, "source_incomplete"),
+        ({"Dockerfile": "FROM x\n", "deploy-spec.yaml": "a: [unclosed"}, "source_incomplete"),
+    ],
+)
 def test_an_incomplete_received_source_is_refused_and_removed(tmp_path, files, code):
     provider, _ = github(tmp_path, FakeClone(files=files))
     with pytest.raises(SourceError) as caught:
@@ -416,7 +526,9 @@ def test_leftovers_of_a_crashed_process_are_cleared_without_touching_the_workspa
     assert len(leftovers(tmp_path)) == 2
     provider.clear_stale()
     assert leftovers(tmp_path) == [] and (tmp_path / "work").is_dir()
-    GitHubCloneSource(tmp_path / "never-created").clear_stale()  # 작업 폴더가 아직 없어도 오류가 아니다
+    GitHubCloneSource(
+        tmp_path / "never-created"
+    ).clear_stale()  # 작업 폴더가 아직 없어도 오류가 아니다
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git이 필요하다")
@@ -428,17 +540,23 @@ def test_the_default_revision_reads_the_real_head_commit_of_the_cloned_folder(tm
         identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
         subprocess.run(["git", "init", "-q"], cwd=destination, check=True)
         subprocess.run(["git", *identity, "add", "."], cwd=destination, check=True)
-        subprocess.run(["git", *identity, "commit", "-q", "-m", "init"], cwd=destination, check=True)
+        subprocess.run(
+            ["git", *identity, "commit", "-q", "-m", "init"], cwd=destination, check=True
+        )
         return destination
 
     provider = GitHubCloneSource(tmp_path / "work", clone=clone_with_git)
     result = provider.fetch("owner/todo-app2", "main", TOKEN)
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=result.path, capture_output=True, text=True, check=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=result.path, capture_output=True, text=True, check=True
+    ).stdout.strip()
     assert result.commit_sha == head[:12] and (result.path / ".git").is_dir()
 
 
 @pytest.mark.parametrize("name", ["owner/todo\n", "todo\n"])
-def test_a_trailing_newline_does_not_slip_through_the_name_check_of_the_local_folder_either(tmp_path, name):
+def test_a_trailing_newline_does_not_slip_through_the_name_check_of_the_local_folder_either(
+    tmp_path, name
+):
     make(tmp_path)  # "todo" 폴더는 있다. 이름 끝의 줄바꿈은 다른 이름이다
     with pytest.raises(SourceError) as caught:
         LocalFolderSource(tmp_path).fetch(name)

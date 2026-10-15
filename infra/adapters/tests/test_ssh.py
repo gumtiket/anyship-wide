@@ -21,7 +21,9 @@ class FakeRunner:
         self.calls.append((cmd, kwargs))
         if self._error:
             raise self._error
-        return subprocess.CompletedProcess(cmd, self._done[0], stdout=self._done[1], stderr=self._done[2])
+        return subprocess.CompletedProcess(
+            cmd, self._done[0], stdout=self._done[1], stderr=self._done[2]
+        )
 
     @property
     def command(self):
@@ -44,18 +46,26 @@ def test_command_targets_the_deploy_account_with_key_only_options():
     cmd = fake.command
     assert cmd[0] == "ssh" and "deploy@3.38.88.141" in cmd
     options = " ".join(cmd)
-    for expected in (f"-i {KEY}", "BatchMode=yes",
-                     "PasswordAuthentication=no", "IdentitiesOnly=yes", "-p 22"):
+    for expected in (
+        f"-i {KEY}",
+        "BatchMode=yes",
+        "PasswordAuthentication=no",
+        "IdentitiesOnly=yes",
+        "-p 22",
+    ):
         assert expected in options
 
 
-@pytest.mark.parametrize("args", [
-    ["echo", "a; touch /tmp/x"],
-    ["echo", "$(id)", "`id`"],
-    ["echo", "it's", 'say "hi"'],
-    ["echo", "a b", "c\nd"],
-    ["echo", "&& reboot", "| cat", "> /etc/passwd"],
-])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["echo", "a; touch /tmp/x"],
+        ["echo", "$(id)", "`id`"],
+        ["echo", "it's", 'say "hi"'],
+        ["echo", "a b", "c\nd"],
+        ["echo", "&& reboot", "| cat", "> /etc/passwd"],
+    ],
+)
 def test_every_argument_reaches_the_remote_shell_as_one_token(args):
     runner, fake = make()
     runner.run(args)
@@ -64,7 +74,9 @@ def test_every_argument_reaches_the_remote_shell_as_one_token(args):
 
 def test_known_hosts_file_is_used_when_given():
     fake = FakeRunner()
-    SshRunner(SshConnection("h.example.com", KEY), runner=fake, known_hosts=Path("/var/known")).run(["true"])
+    SshRunner(SshConnection("h.example.com", KEY), runner=fake, known_hosts=Path("/var/known")).run(
+        ["true"]
+    )
     assert f"UserKnownHostsFile={Path('/var/known')}" in " ".join(fake.command)
 
 
@@ -113,10 +125,19 @@ def test_put_creates_the_file_private_first_then_sets_the_mode_then_replaces():
     assert script.index("umask 077") < script.index("chmod") < script.index("mv")
 
 
-@pytest.mark.parametrize("path, mode", [
-    ("opt/x", "0644"), ("/opt/../etc/passwd", "0644"), ("/opt/a b", "0644"),
-    ("/opt/a;b", "0644"), ("", "0644"), ("/opt/x", "644"), ("/opt/x", "0999"), ("/opt/x", "u+x"),
-])
+@pytest.mark.parametrize(
+    "path, mode",
+    [
+        ("opt/x", "0644"),
+        ("/opt/../etc/passwd", "0644"),
+        ("/opt/a b", "0644"),
+        ("/opt/a;b", "0644"),
+        ("", "0644"),
+        ("/opt/x", "644"),
+        ("/opt/x", "0999"),
+        ("/opt/x", "u+x"),
+    ],
+)
 def test_put_rejects_unsafe_paths_and_modes_before_running_anything(path, mode):
     runner, fake = make()
     with pytest.raises(ValueError):
@@ -125,11 +146,19 @@ def test_put_rejects_unsafe_paths_and_modes_before_running_anything(path, mode):
 
 
 # --- 입력 검증 ------------------------------------------------------------------------------
-@pytest.mark.parametrize("host, user, port", [
-    ("-oProxyCommand=x", "deploy", 22), ("a b", "deploy", 22), ("a;ls", "deploy", 22), ("", "deploy", 22),
-    ("h.example.com", "Root", 22), ("h.example.com", "a b", 22), ("h.example.com", "deploy", 0),
-    ("h.example.com", "deploy", 70000),
-])
+@pytest.mark.parametrize(
+    "host, user, port",
+    [
+        ("-oProxyCommand=x", "deploy", 22),
+        ("a b", "deploy", 22),
+        ("a;ls", "deploy", 22),
+        ("", "deploy", 22),
+        ("h.example.com", "Root", 22),
+        ("h.example.com", "a b", 22),
+        ("h.example.com", "deploy", 0),
+        ("h.example.com", "deploy", 70000),
+    ],
+)
 def test_connection_values_that_could_reach_the_command_line_are_rejected(host, user, port):
     with pytest.raises(ValueError):
         SshConnection(host, KEY, user=user, port=port)

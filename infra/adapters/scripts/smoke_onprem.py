@@ -13,6 +13,7 @@ check -> deploy -> 재배포 -> status -> rollback -> (없는 버전으로 rollb
 
     python scripts/smoke_onprem.py --host 3.38.88.141 --env-id dnstest --dns --staging
 """
+
 import argparse
 import json
 import ssl
@@ -31,7 +32,7 @@ APP = "smoke"
 V1, V2, MISSING = "1111111", "2222222", "3333333"
 
 # 시험 앱: 표준 라이브러리만 쓰는 작은 웹 서버. /healthz와 /에서 200을 돌려준다.
-SERVER = '''import json
+SERVER = """import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -51,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 HTTPServer(("0.0.0.0", int(os.environ["PORT"])), Handler).serve_forever()
-'''
+"""
 DOCKERFILE = """FROM public.ecr.aws/docker/library/python:3.12-slim
 COPY server.py /app/server.py
 USER 65532
@@ -130,22 +131,33 @@ def main() -> int:
     parser.add_argument("--env-id", default="demo")
     parser.add_argument("--key", default=str(Path.home() / ".ssh" / "onprem_deploy"))
     parser.add_argument("--domain", default="anyship.cloud")
-    parser.add_argument("--staging", action="store_true", help="Let's Encrypt staging 인증서면 TLS 검증을 끈다")
-    parser.add_argument("--keep", action="store_true", help="마지막에 destroy하지 않고 시험 앱을 남긴다")
-    parser.add_argument("--dns", action="store_true", help="Route 53 레코드도 어댑터가 만들고 지운다")
+    parser.add_argument(
+        "--staging", action="store_true", help="Let's Encrypt staging 인증서면 TLS 검증을 끈다"
+    )
+    parser.add_argument(
+        "--keep", action="store_true", help="마지막에 destroy하지 않고 시험 앱을 남긴다"
+    )
+    parser.add_argument(
+        "--dns", action="store_true", help="Route 53 레코드도 어댑터가 만들고 지운다"
+    )
     args = parser.parse_args()
     if args.dns and args.env_id == "demo":
-        print("--dns는 진짜 demo 환경과 같이 쓸 수 없습니다(끝에서 환경의 레코드를 지웁니다). 다른 --env-id를 쓰세요.")
+        print(
+            "--dns는 진짜 demo 환경과 같이 쓸 수 없습니다(끝에서 환경의 레코드를 지웁니다). 다른 --env-id를 쓰세요."
+        )
         return 2
 
     env = OnpremEnvironment(env_id=args.env_id, host=args.host)
     records = None
     if args.dns:
         from anyship_adapters.dns import WildcardRecords
+
         records = WildcardRecords(base_domain=args.domain)
         if records.remove(args.env_id):  # 항상 레코드가 없는 새 환경에서 시작한다
             print(f"(이전 시험이 남긴 {args.env_id} 레코드를 지웠습니다)")
-    adapter = OnpremAdapter(Path(args.key), base_domain=args.domain, verify_tls=not args.staging, dns=records)
+    adapter = OnpremAdapter(
+        Path(args.key), base_domain=args.domain, verify_tls=not args.staging, dns=records
+    )
     url = f"https://{APP}.{args.env_id}.onprem.{args.domain}"
 
     print("1) check")
@@ -169,12 +181,17 @@ def main() -> int:
     expect("재배포가 성공한다", second.ok)
     if args.dns:
         expect("재배포는 DNS 레코드를 건드리지 않았다", any("이미 맞습니다" in m for m in messages))
-    expect("새로 만든 비밀이 없다(서버의 비밀을 재사용)", second.ok and second.details.get("generated") == [])
+    expect(
+        "새로 만든 비밀이 없다(서버의 비밀을 재사용)",
+        second.ok and second.details.get("generated") == [],
+    )
     expect("재배포 뒤에도 200으로 응답한다", http(url + "/", args.staging)[0] == 200)
 
     print("4) status")
     state = timed(lambda: adapter.status(env, APP))
-    expect("실행 중이고 최신 버전이다", state.ok and state.state == "running" and state.image_tag == V2)
+    expect(
+        "실행 중이고 최신 버전이다", state.ok and state.state == "running" and state.image_tag == V2
+    )
 
     print(f"5) rollback {V1}")
     back = timed(lambda: adapter.rollback(env, APP, V1, log))
@@ -204,15 +221,21 @@ def main() -> int:
             messages.clear()
             dns_gone = timed(lambda: adapter.remove_environment_dns(env, log))
             show(dns_gone)
-            expect("환경 DNS 삭제가 성공한다", dns_gone.ok and any("지웠습니다" in m for m in messages))
-            expect("레코드가 실제로 없어졌다(다시 지울 게 없다)", records.remove(args.env_id) is False)
+            expect(
+                "환경 DNS 삭제가 성공한다", dns_gone.ok and any("지웠습니다" in m for m in messages)
+            )
+            expect(
+                "레코드가 실제로 없어졌다(다시 지울 게 없다)", records.remove(args.env_id) is False
+            )
 
     failed = [label for label, ok in results if not ok]
     print(f"\n결과: {len(results) - len(failed)}/{len(results)} OK")
     for label in failed:
         print("  FAIL:", label)
-    print("시험에 쓴 이미지 정리(서버): docker image rm "
-          f"{APP}:{V1} {APP}:{V2}   / (서비스 서버): docker image rm {APP}:{V1} {APP}:{V2}")
+    print(
+        "시험에 쓴 이미지 정리(서버): docker image rm "
+        f"{APP}:{V1} {APP}:{V2}   / (서비스 서버): docker image rm {APP}:{V1} {APP}:{V2}"
+    )
     return 1 if failed else 0
 
 

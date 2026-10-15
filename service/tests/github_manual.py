@@ -51,9 +51,7 @@ class PullRequestCreationError(RuntimeError):
         self.branch = branch
 
 
-def get_repository(
-    repo_url: str, destination: Path, settings: Settings
-) -> GitHubRepository:
+def get_repository(repo_url: str, destination: Path, settings: Settings) -> GitHubRepository:
     repo = GitHubRepository(repo_url, destination, settings.github_token)
     if repo.repository.lower() != settings.github_allowed_repo.lower():
         raise ValueError("허용되지 않은 레포입니다.")
@@ -181,13 +179,9 @@ def run_manual_test(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "prepare":
-            result = prepare_workspace(
-                args.repo_url, args.directory, branch=args.branch
-            )
+            result = prepare_workspace(args.repo_url, args.directory, branch=args.branch)
         else:
-            result = publish_workspace(
-                args.repo_url, args.directory, open_pr=args.pr
-            )
+            result = publish_workspace(args.repo_url, args.directory, open_pr=args.pr)
     except PullRequestCreationError as exc:
         report_error(
             "브랜치 푸시 후 PR 생성 결과를 확인하지 못했습니다. 재실행 전에 GitHub를 확인하세요.",

@@ -7,16 +7,25 @@
 출력이 이상한 경우에는 20분짜리 apply를 시작하지 않고 그대로 오류를 올린다. apply가 도중에 끊긴 경우(출력이 아직 기록되기 전)는
 state가 비어 있는 것과 같아서, 다시 부르면 만들어진 것은 이어서 진행된다.
 """
+
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from .base import LogFn
 from .models import AwsEnvironment, LogEvent
 from .terraform_runner import TerraformError, TerraformRunner
 
 # 서비스가 바꿀 수 있는 선택 변수. 값의 범위는 Terraform의 validation이 강제한다(infra/user-account/variables.tf).
-OPTIONAL_VARIABLES = frozenset({"vpc_cidr", "host_instance_type", "host_volume_size", "db_instance_class",
-                                "db_allocated_storage"})
+OPTIONAL_VARIABLES = frozenset(
+    {
+        "vpc_cidr",
+        "host_instance_type",
+        "host_volume_size",
+        "db_instance_class",
+        "db_allocated_storage",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -34,9 +43,15 @@ class FoundationSettings:
             raise ValueError("unknown foundation overrides: " + ", ".join(unknown))
 
     def variables(self, env: AwsEnvironment) -> dict[str, Any]:
-        return {"region": env.region, "account_id": env.role_arn.split(":")[4], "env_id": env.env_id,
-                "service_server_ip": self.service_server_ip, "ssh_public_key": self.ssh_public_key,
-                "acme_email": self.acme_email, **self.overrides}
+        return {
+            "region": env.region,
+            "account_id": env.role_arn.split(":")[4],
+            "env_id": env.env_id,
+            "service_server_ip": self.service_server_ip,
+            "ssh_public_key": self.ssh_public_key,
+            "acme_email": self.acme_email,
+            **self.overrides,
+        }
 
 
 @dataclass(frozen=True)
@@ -46,11 +61,17 @@ class Foundation:
 
     def fields(self) -> dict[str, Any]:
         """서비스가 환경 레코드에 저장할 값. 비밀이 아니다(비밀번호는 Secrets Manager에만 있다)."""
-        return {"host": self.env.host, "db_address": self.env.db_address, "db_port": self.env.db_port,
-                "db_secret_arn": self.env.db_secret_arn}
+        return {
+            "host": self.env.host,
+            "db_address": self.env.db_address,
+            "db_port": self.env.db_port,
+            "db_secret_arn": self.env.db_secret_arn,
+        }
 
 
-def ensure_foundation(runner: TerraformRunner, env: AwsEnvironment, settings: FoundationSettings, log: LogFn) -> Foundation:
+def ensure_foundation(
+    runner: TerraformRunner, env: AwsEnvironment, settings: FoundationSettings, log: LogFn
+) -> Foundation:
     try:
         return Foundation(runner.read_foundation(env, log), created=False)
     except TerraformError as exc:

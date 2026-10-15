@@ -1,6 +1,7 @@
 """Persist AWS onboarding requests and verified role connections."""
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "0005"
 down_revision = "0004"
@@ -31,7 +32,9 @@ def upgrade():
         sa.Column("verified_at", sa.BigInteger(), nullable=True),
         sa.Column("verification_token", sa.String(36), nullable=False),
         sa.Column("lease_until", sa.BigInteger(), nullable=False),
-        sa.UniqueConstraint("workspace_id", "created_by", "request_id", name="uq_aws_environment_request"),
+        sa.UniqueConstraint(
+            "workspace_id", "created_by", "request_id", name="uq_aws_environment_request"
+        ),
         sa.UniqueConstraint("workspace_id", "role_arn", name="uq_aws_environment_role"),
     )
     op.create_index("ix_aws_environments_workspace_id", "aws_environments", ["workspace_id"])

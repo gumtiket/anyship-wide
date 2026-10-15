@@ -1,14 +1,13 @@
 from pathlib import Path
 
 import pytest
+from fakes import LifecycleServer, Log
+from specs import GENERATED
 
 from anyship_adapters import OnpremEnvironment
 from anyship_adapters.compose_host import ComposeHost
 from anyship_adapters.onprem import OnpremAdapter
 from anyship_adapters.ssh import SshConnection, SshRunner
-
-from fakes import LifecycleServer, Log
-from specs import GENERATED
 
 ENV = OnpremEnvironment(env_id="demo", host="3.38.88.141")
 V1, V2 = "aaaaaaa", "bbbbbbb"
@@ -35,8 +34,9 @@ def setup(health=None, **responses):
     srv = LifecycleServer(responses={tuple(k.split()): v for k, v in responses.items()})
     ssh = SshRunner(SshConnection("3.38.88.141", Path("/key")), runner=srv)
     check = health or Health()
-    adapter = OnpremAdapter(Path("/key"), connect=lambda env: (ssh, ComposeHost(ssh, popen=srv.popen)),
-                            healthy=check)
+    adapter = OnpremAdapter(
+        Path("/key"), connect=lambda env: (ssh, ComposeHost(ssh, popen=srv.popen)), healthy=check
+    )
     return adapter, srv, check
 
 
@@ -65,8 +65,9 @@ def test_status_of_a_running_app_reports_the_tag_the_url_and_checks_health_once(
     result = adapter.status(ENV, APP)
     assert (result.ok, result.state, result.image_tag) == (True, "running", V2)
     assert result.url == "https://todo.demo.onprem.anyship.cloud"
-    assert health.calls == [("https://todo.demo.onprem.anyship.cloud/healthz",
-                             {"attempts": 1, "verify_tls": True})]  # 한 번만 확인해서 빠르다
+    assert health.calls == [
+        ("https://todo.demo.onprem.anyship.cloud/healthz", {"attempts": 1, "verify_tls": True})
+    ]  # 한 번만 확인해서 빠르다
 
 
 def test_status_tells_unhealthy_and_stopped_apart():
@@ -94,19 +95,28 @@ def test_rollback_runs_the_older_image_and_changes_nothing_else():
     log = Log()
     result = adapter.rollback(ENV, APP, V1, log)
     new = srv.files[f"{DIR}/compose.yaml"].decode().splitlines()
-    assert result.ok and result.image_tag == V1 and result.url == "https://todo.demo.onprem.anyship.cloud"
-    assert [(a, b) for a, b in zip(old, new) if a != b] == [(f'    image: "todo:{V2}"', f'    image: "todo:{V1}"')]
+    assert (
+        result.ok
+        and result.image_tag == V1
+        and result.url == "https://todo.demo.onprem.anyship.cloud"
+    )
+    assert [(a, b) for a, b in zip(old, new, strict=False) if a != b] == [
+        (f'    image: "todo:{V2}"', f'    image: "todo:{V1}"')
+    ]
     assert {n: srv.files[f"{DIR}/{n}"] for n in secrets} == secrets  # 비밀 파일은 그대로
     assert [s[:2] for s in log.steps()] == [(1, 4), (2, 4), (3, 4), (4, 4)]
     assert adapter.status(ENV, APP).image_tag == V1
 
 
-@pytest.mark.parametrize("app, tag, code", [
-    (APP, "ccccccc", "image_not_found"),  # 서버에 이 버전의 이미지가 없다
-    ("other", V1, "app_not_found"),
-    (APP, "latest", "invalid_image_tag"),
-    ("Bad Name", V1, "invalid_spec"),
-])
+@pytest.mark.parametrize(
+    "app, tag, code",
+    [
+        (APP, "ccccccc", "image_not_found"),  # 서버에 이 버전의 이미지가 없다
+        ("other", V1, "app_not_found"),
+        (APP, "latest", "invalid_image_tag"),
+        ("Bad Name", V1, "invalid_spec"),
+    ],
+)
 def test_rollback_that_cannot_proceed_changes_nothing_on_the_server(app, tag, code):
     adapter, srv, _ = deployed()
     before, ups = dict(srv.files), sum(1 for c in srv.commands if tuple(c[:5]) == UP)
@@ -157,7 +167,9 @@ def test_destroy_keeps_the_files_when_the_containers_could_not_be_removed_and_hi
     result = adapter.destroy(ENV, APP, Log())
     assert not result.ok and result.error.code == "destroy_failed"
     assert FAKE_TOKEN not in result.model_dump_json() and "***" in result.details["stderr"]
-    assert srv.removed == [] and f"{DIR}/app.env" in srv.files  # 컨테이너가 남았는데 파일만 지우지 않는다
+    assert (
+        srv.removed == [] and f"{DIR}/app.env" in srv.files
+    )  # 컨테이너가 남았는데 파일만 지우지 않는다
 
 
 @pytest.mark.parametrize("app", ["..", "../etc", "a/b", "Todo", "a b", ""])

@@ -1,4 +1,5 @@
 """시험에 쓰는 배포 명세. AI 쪽이 실제로 만든 두 가지 모양을 그대로 옮겼다."""
+
 import copy
 
 # AI가 생성한 명세(AI/ai/demo-cache/todo/out/deploy-spec.yaml): PORT가 env에 들어 있다.
@@ -15,7 +16,12 @@ GENERATED = {
         {"name": "SECRET_KEY", "secret": True, "generate": True},
     ],
     "backing_services": [{"type": "postgres", "bind_as": "DATABASE_URL"}],
-    "workload": {"type": "request-driven", "scale_to_zero": True, "max_request_seconds": 10, "websocket": False},
+    "workload": {
+        "type": "request-driven",
+        "scale_to_zero": True,
+        "max_request_seconds": 10,
+        "websocket": False,
+    },
     "processes": {"web": {"instances": 1}},
     "release": {"migrate": "python -m app.migrate"},
     "profile": "dev",
@@ -35,7 +41,12 @@ HAND_WRITTEN = {
         {"type": "postgres", "bind_as": "DATABASE_URL"},
         {"type": "object_storage", "bind_as": "STORAGE_URL"},
     ],
-    "workload": {"type": "always-on", "scale_to_zero": False, "max_request_seconds": 10, "websocket": False},
+    "workload": {
+        "type": "always-on",
+        "scale_to_zero": False,
+        "max_request_seconds": 10,
+        "websocket": False,
+    },
     "processes": {"web": {"instances": 1}},
     "release": {"migrate": "python -m app.migrate"},
     "profile": "dev",
