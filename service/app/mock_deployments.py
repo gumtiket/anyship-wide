@@ -15,20 +15,17 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from .db import AwsEnvironment, MockDeployment, MockJob, Project
+from .errors import api_error
 
 ACTIVE = ("queued", "running")
 SETS = {"aws": ("aws-serverless", "aws-always-on"), "onprem": ("onprem",)}
 SAMPLES = {"sample-aws": ("샘플 AWS", "aws"), "sample-onprem": ("샘플 온프레미스", "onprem")}
-
-
-def fail(code, message, status=409):
-    raise HTTPException(status, {"code": code, "message": message})
 
 
 def clear_targets(session, *, project_id=None, environment_id=None):
@@ -40,7 +37,7 @@ def clear_targets(session, *, project_id=None, environment_id=None):
     )
     session.execute(delete(MockDeployment).where(condition, MockDeployment.active_job_id.is_(None)))
     if session.scalar(select(MockDeployment.project_id).where(condition)):
-        fail("mock_job_running", "모의 배포 작업 중입니다. 완료 후 삭제해 주세요.")
+        api_error(409, "mock_job_running", "모의 배포 작업 중입니다. 완료 후 삭제해 주세요.")
     if project_id is not None:
         session.execute(delete(MockJob).where(MockJob.project_id == project_id))
 
@@ -203,7 +200,7 @@ class MockRunner:
         if target.aws_environment_id:
             row = session.get(AwsEnvironment, target.aws_environment_id)
             if row is None or not (row.submitted_role_arn or row.role_arn):
-                fail("role_required", "선택한 AWS 환경에 Role ARN을 먼저 저장해 주세요.")
+                api_error(409, "role_required", "선택한 AWS 환경에 Role ARN을 먼저 저장해 주세요.")
             return AdapterAWS(
                 env_id=target.adapter_env_id,
                 role_arn=row.submitted_role_arn or row.role_arn,
@@ -346,9 +343,9 @@ def router(settings, runner, db, current, mutation):
             )
         )
         if row is None:
-            fail("project_not_found", "프로젝트를 찾을 수 없습니다.", 404)
+            api_error(404, "project_not_found", "프로젝트를 찾을 수 없습니다.")
         if runner is None or runner.executor is None:
-            fail("mock_unavailable", "모의 배포 기능이 활성화되지 않았습니다.", 503)
+            api_error(503, "mock_unavailable", "모의 배포 기능이 활성화되지 않았습니다.")
         return row
 
     @routes.get("")
@@ -391,7 +388,8 @@ def router(settings, runner, db, current, mutation):
                 target.active_job_id
                 or runner.target_json(target, session)["state"] != "not_deployed"
             ):
-                fail(
+                api_error(
+                    409,
                     "target_in_use",
                     "진행 중 작업을 마치고 모의 배포를 제거한 뒤 환경을 변경해 주세요.",
                 )
@@ -409,12 +407,12 @@ def router(settings, runner, db, current, mutation):
                     .with_for_update()
                 )
                 if row is None:
-                    fail("environment_not_found", "환경을 찾을 수 없습니다.", 404)
+                    api_error(404, "environment_not_found", "환경을 찾을 수 없습니다.")
                 if not (row.submitted_role_arn or row.role_arn):
-                    fail("role_required", "Role ARN을 먼저 저장해 주세요.")
+                    api_error(409, "role_required", "Role ARN을 먼저 저장해 주세요.")
                 aws_id, label, kind = row.id, row.name, "aws"
             if body.set_name not in SETS[kind]:
-                fail("set_not_supported", "환경에 맞는 배포 방식을 선택해 주세요.", 422)
+                api_error(422, "set_not_supported", "환경에 맞는 배포 방식을 선택해 주세요.")
             if target:
                 removed = session.execute(
                     delete(MockDeployment).where(
@@ -423,7 +421,7 @@ def router(settings, runner, db, current, mutation):
                     )
                 )
                 if removed.rowcount != 1:
-                    fail("mock_job_running", "모의 작업이 진행 중입니다.")
+                    api_error(409, "mock_job_running", "모의 작업이 진행 중입니다.")
                 session.flush()
             new = MockDeployment(
                 project_id=project_id,
@@ -439,8 +437,10 @@ def router(settings, runner, db, current, mutation):
                 session.commit()
             except IntegrityError:
                 session.rollback()
-                fail(
-                    "selection_conflict", "프로젝트 또는 환경이 변경되었습니다. 새로고침해 주세요."
+                api_error(
+                    409,
+                    "selection_conflict",
+                    "프로젝트 또는 환경이 변경되었습니다. 새로고침해 주세요.",
                 )
             return runner.target_json(new, session)
 
@@ -469,7 +469,7 @@ def router(settings, runner, db, current, mutation):
         project(session, login, project_id)
         row = session.get(MockJob, str(job_id))
         if row is None or row.project_id != project_id:
-            fail("job_not_found", "작업을 찾을 수 없습니다.", 404)
+            api_error(404, "job_not_found", "작업을 찾을 수 없습니다.")
         return job_json(row)
 
     @routes.post("/jobs", status_code=202)
@@ -493,21 +493,27 @@ def router(settings, runner, db, current, mutation):
                     body.scenario,
                     body.image_tag,
                 ):
-                    fail("request_conflict", "같은 요청 식별자에 다른 작업을 보낼 수 없습니다.")
+                    api_error(
+                        409, "request_conflict", "같은 요청 식별자에 다른 작업을 보낼 수 없습니다."
+                    )
                 response.status_code = 200
                 return job_json(previous)
             target = session.get(MockDeployment, project_id)
             if target is None:
-                fail("target_required", "테스트할 환경을 먼저 선택해 주세요.")
+                api_error(409, "target_required", "테스트할 환경을 먼저 선택해 주세요.")
             if body.action in ("deploy", "rollback") and not body.image_tag:
-                fail("image_tag_required", "테스트 버전을 입력해 주세요.", 422)
+                api_error(422, "image_tag_required", "테스트 버전을 입력해 주세요.")
             if body.action in ("check", "destroy") and body.image_tag:
-                fail("unexpected_image_tag", "이 작업에는 테스트 버전을 보내지 마세요.", 422)
+                api_error(422, "unexpected_image_tag", "이 작업에는 테스트 버전을 보내지 마세요.")
             env = runner.environment(target, session)
             if body.action == "deploy" and target.checked_runtime_id != runner.runtime_id:
-                fail("check_required", "먼저 모의 연결 확인을 완료해 주세요.")
+                api_error(409, "check_required", "먼저 모의 연결 확인을 완료해 주세요.")
             if body.action == "rollback" and body.image_tag not in runner.versions(session, target):
-                fail("version_not_found", "현재 서버 실행 중 배포에 성공한 버전을 선택해 주세요.")
+                api_error(
+                    409,
+                    "version_not_found",
+                    "현재 서버 실행 중 배포에 성공한 버전을 선택해 주세요.",
+                )
             identifier = str(uuid.uuid4())
             claimed = session.execute(
                 update(MockDeployment)
@@ -517,7 +523,7 @@ def router(settings, runner, db, current, mutation):
                 .values(active_job_id=identifier)
             )
             if claimed.rowcount != 1:
-                fail("mock_job_running", "이미 모의 작업을 처리하고 있습니다.")
+                api_error(409, "mock_job_running", "이미 모의 작업을 처리하고 있습니다.")
             row = MockJob(
                 id=identifier,
                 project_id=project_id,

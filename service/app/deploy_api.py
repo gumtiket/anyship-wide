@@ -10,21 +10,18 @@ import time
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 
 from .db import AwsEnvironment, DeployJob, Deployment, OnpremEnvironment, Project
 from .deploy_state import DeployStateError
 from .deployments import REAL_SETS, DeploymentError, job_json, select_target
+from .errors import api_error
 from .source import SourceError
 
 _SECRET_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
 MAX_SECRETS, MAX_SECRET_LENGTH = 50, 4096
-
-
-def fail(status, code, message):
-    raise HTTPException(status, {"code": code, "message": message})
 
 
 class TargetInput(BaseModel):
@@ -84,9 +81,9 @@ def router(settings, runner, db, current, mutation, access_token=None):
             )
         )
         if row is None:
-            fail(404, "project_not_found", "프로젝트를 찾을 수 없습니다.")
+            api_error(404, "project_not_found", "프로젝트를 찾을 수 없습니다.")
         if runner is None or runner.executor is None:
-            fail(503, "deploy_unavailable", "실제 배포 기능이 활성화되지 않았습니다.")
+            api_error(503, "deploy_unavailable", "실제 배포 기능이 활성화되지 않았습니다.")
         return row
 
     def owned_environments(session, login):
@@ -190,7 +187,7 @@ def router(settings, runner, db, current, mutation, access_token=None):
                 owned_environments(session, login).where(AwsEnvironment.id == str(environment_id))
             )
         if environment is None:
-            fail(404, "environment_not_found", "환경을 찾을 수 없습니다.")
+            api_error(404, "environment_not_found", "환경을 찾을 수 없습니다.")
         return environment
 
     @routes.put("")
@@ -202,7 +199,7 @@ def router(settings, runner, db, current, mutation, access_token=None):
                 session, select_target(session, project_id, environment, body.set_name)
             )
         except (DeploymentError, DeployStateError) as error:
-            fail(getattr(error, "status", 409), error.code, error.message)
+            api_error(getattr(error, "status", 409), error.code, error.message)
 
     @routes.get("/jobs")
     def jobs(
@@ -229,7 +226,7 @@ def router(settings, runner, db, current, mutation, access_token=None):
         project(session, login, project_id)
         row = session.get(DeployJob, str(job_id))
         if row is None or row.project_id != project_id:
-            fail(404, "job_not_found", "작업을 찾을 수 없습니다.")
+            api_error(404, "job_not_found", "작업을 찾을 수 없습니다.")
         return job_json(row)
 
     @routes.post("/jobs", status_code=202)
@@ -249,14 +246,16 @@ def router(settings, runner, db, current, mutation, access_token=None):
                     or not target.onprem_environment_id
                     or not getattr(runner, "onprem", None)
                 ):
-                    fail(422, "action_not_supported", "이 환경에서는 지원하지 않는 작업입니다.")
+                    api_error(
+                        422, "action_not_supported", "이 환경에서는 지원하지 않는 작업입니다."
+                    )
                 created_job, created = runner.onprem.submit_project(
                     session, row, body.request_id, body.action, image_tag=body.image_tag
                 )
             elif body.action in ("migrate", "destroy_previous"):
                 migration = getattr(runner, "migration", None)
                 if migration is None:
-                    fail(
+                    api_error(
                         422, "action_not_supported", "이 서버에서는 환경 이전을 지원하지 않습니다."
                     )
                 if body.action == "destroy_previous":
@@ -280,9 +279,9 @@ def router(settings, runner, db, current, mutation, access_token=None):
                     session, row, body.request_id, body.secrets, token=token
                 )
         except DeploymentError as error:
-            fail(error.status, error.code, error.message)
+            api_error(error.status, error.code, error.message)
         except (DeployStateError, SourceError) as error:
-            fail(409, error.code, error.message)
+            api_error(409, error.code, error.message)
         response.status_code = 202 if created else 200
         return job_json(created_job)
 

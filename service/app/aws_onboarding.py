@@ -5,7 +5,7 @@ import time
 import uuid
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -14,14 +14,11 @@ from .aws_adapter import ERRORS, AwsAdapter, AwsCheckError
 from .aws_validation import role_account_id
 from .db import AwsEnvironment
 from .deployments import clear_real_targets
+from .errors import api_error
 from .mock_deployments import clear_targets
 
 REQUEST_TTL = 86400
 VERIFICATION_LEASE = 120
-
-
-def fail(status, code, message, retryable=False):
-    raise HTTPException(status, {"code": code, "message": message, "retryable": retryable})
 
 
 class EnvironmentInput(BaseModel):
@@ -104,12 +101,17 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
     def require(session, login, identifier):
         row = session.scalar(owned(login).where(AwsEnvironment.id == identifier))
         if row is None:
-            fail(404, "environment_not_found", "AWS 환경을 찾을 수 없습니다.")
+            api_error(404, "environment_not_found", "AWS 환경을 찾을 수 없습니다.", retryable=False)
         return row
 
     def configured():
         if not settings.aws_configured:
-            fail(503, "aws_not_configured", "AWS 환경 등록을 위한 서비스 설정이 필요합니다.")
+            api_error(
+                503,
+                "aws_not_configured",
+                "AWS 환경 등록을 위한 서비스 설정이 필요합니다.",
+                retryable=False,
+            )
 
     @routes.get("")
     def list_environments(
@@ -146,11 +148,11 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             )
         )
         if removed.rowcount != 1:
-            fail(
+            api_error(
                 409,
                 "verification_in_progress",
                 "연결 검증 중입니다. 완료 후 환경을 삭제해 주세요.",
-                True,
+                retryable=True,
             )
         session.commit()
         return Response(status_code=204)
@@ -163,10 +165,11 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
 
         def existing(row):
             if row.name != body.name or row.region != body.region:
-                fail(
+                api_error(
                     409,
                     "request_conflict",
                     "같은 request_id를 다른 환경 등록에 사용할 수 없습니다.",
+                    retryable=False,
                 )
             response.status_code = 200
             return summary(row)
@@ -176,7 +179,12 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             return existing(row)
         configured()
         if body.region not in settings.aws_regions:
-            fail(422, "unsupported_region", "서비스에서 지원하는 AWS 리전을 선택해 주세요.")
+            api_error(
+                422,
+                "unsupported_region",
+                "서비스에서 지원하는 AWS 리전을 선택해 주세요.",
+                retryable=False,
+            )
         identifier = uuid.uuid4()
         now = int(time.time())
         row = AwsEnvironment(
@@ -203,8 +211,11 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             row = session.scalar(request)
             if row:
                 return existing(row)
-            fail(
-                409, "request_conflict", "환경 등록 요청이 충돌했습니다. 다시 시도해 주세요.", True
+            api_error(
+                409,
+                "request_conflict",
+                "환경 등록 요청이 충돌했습니다. 다시 시도해 주세요.",
+                retryable=True,
             )
         return summary(row)
 
@@ -216,12 +227,20 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
         row = require(session, login, identifier)
         if row.status == "CONNECTED":
             if row.role_arn != body.role_arn:
-                fail(409, "already_connected", "이미 연결된 환경의 역할은 변경할 수 없습니다.")
+                api_error(
+                    409,
+                    "already_connected",
+                    "이미 연결된 환경의 역할은 변경할 수 없습니다.",
+                    retryable=False,
+                )
             return summary(row)
         now = int(time.time())
         if row.expires_at <= now:
-            fail(
-                410, "request_expired", "환경 등록 요청이 만료되었습니다. 새 요청을 만들어 주세요."
+            api_error(
+                410,
+                "request_expired",
+                "환경 등록 요청이 만료되었습니다. 새 요청을 만들어 주세요.",
+                retryable=False,
             )
         # 입력 저장에는 AWS 설정이나 자격 증명이 필요 없다. 진행 중인 확인이 끝나기 전에는
         # 다른 입력이 그 후보를 바꿀 수 없다.
@@ -245,11 +264,11 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
         )
         session.commit()
         if saved.rowcount != 1:
-            fail(
+            api_error(
                 409,
                 "verification_in_progress",
                 "검증 중이거나 상태가 변경되었습니다. 환경 상태를 다시 조회해 주세요.",
-                True,
+                retryable=True,
             )
         session.expire_all()
         return summary(require(session, login, identifier))
@@ -262,28 +281,37 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
         row = require(session, login, identifier)
         if row.status == "CONNECTED":
             if row.role_arn != body.role_arn:
-                fail(409, "already_connected", "이미 연결된 환경의 역할은 변경할 수 없습니다.")
+                api_error(
+                    409,
+                    "already_connected",
+                    "이미 연결된 환경의 역할은 변경할 수 없습니다.",
+                    retryable=False,
+                )
             return summary(row)
         configured()
         now = int(time.time())
         if row.expires_at <= now:
-            fail(
-                410, "request_expired", "환경 등록 요청이 만료되었습니다. 새 요청을 만들어 주세요."
+            api_error(
+                410,
+                "request_expired",
+                "환경 등록 요청이 만료되었습니다. 새 요청을 만들어 주세요.",
+                retryable=False,
             )
         if (
             row.region not in settings.aws_regions
             or row.service_role_arn != settings.aws_service_role_arn
         ):
-            fail(
+            api_error(
                 409,
                 "configuration_changed",
                 "등록 후 AWS 연결 설정이 변경되었습니다. 새 요청을 만들어 주세요.",
+                retryable=False,
             )
         if adapter is None:
             # 확인 완료나 연결 성공으로 표시하지 않고 입력만 보존한다.
             save_role(environment_id, body, login, session)
             status, message = ERRORS["aws_adapter_unavailable"]
-            fail(status, "aws_adapter_unavailable", message, True)
+            api_error(status, "aws_adapter_unavailable", message, retryable=True)
         token = str(uuid.uuid4())
         claim = session.execute(
             update(AwsEnvironment)
@@ -305,11 +333,11 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
         )
         session.commit()
         if claim.rowcount != 1:
-            fail(
+            api_error(
                 409,
                 "verification_in_progress",
                 "이미 검증 중이거나 상태가 변경되었습니다. 환경 상태를 다시 조회해 주세요.",
-                True,
+                retryable=True,
             )
         external_id, region = row.external_id, row.region
         # AWS를 호출하는 동안에는 DB 잠금이나 트랜잭션을 잡고 있지 않는다.
@@ -334,17 +362,18 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             )
             session.commit()
             if changed.rowcount != 1:
-                fail(
+                api_error(
                     409,
                     "verification_superseded",
                     "검증 요청이 다른 요청으로 대체되었습니다. 상태를 다시 조회해 주세요.",
-                    True,
+                    retryable=True,
                 )
             if expired:
-                fail(
+                api_error(
                     410,
                     "request_expired",
                     "검증 중 환경 등록 요청이 만료되었습니다. 새 요청을 만들어 주세요.",
+                    retryable=False,
                 )
 
         try:
@@ -360,7 +389,7 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
             )
             finish_failure(code)
             status_code, message = ERRORS[code]
-            fail(status_code, code, message, True)
+            api_error(status_code, code, message, retryable=True)
         finished = int(time.time())
         if row.expires_at <= finished:
             finish_failure("request_expired")
@@ -382,13 +411,18 @@ def router(settings, adapter: AwsAdapter | None, db, current, mutation):
         except IntegrityError:
             session.rollback()
             finish_failure("role_already_registered")
-            fail(409, "role_already_registered", "이 워크스페이스에 이미 등록된 AWS 역할입니다.")
+            api_error(
+                409,
+                "role_already_registered",
+                "이 워크스페이스에 이미 등록된 AWS 역할입니다.",
+                retryable=False,
+            )
         if saved.rowcount != 1:
-            fail(
+            api_error(
                 409,
                 "verification_superseded",
                 "검증 요청이 다른 요청으로 대체되었습니다. 상태를 다시 조회해 주세요.",
-                True,
+                retryable=True,
             )
         session.expire_all()
         return summary(require(session, login, identifier))

@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from .db import Deployment, OnpremEnvironment, OnpremJob, OnpremRegistrationToken
 from .deploy_state import DeployStateError
 from .deployments import DeploymentError
+from .errors import api_error
 from .onprem_transport import error_message, guidance, record_report, require_kind
 
 TOKEN_TTL = 15 * 60
@@ -78,9 +79,7 @@ def router(settings, runner, db, current, mutation):
         return worker
 
     def fail(error):
-        raise HTTPException(
-            getattr(error, "status", 422), {"code": error.code, "message": error.message}
-        )
+        api_error(getattr(error, "status", 422), error.code, error.message)
 
     def owned(session, login, *, include_deleted=False):
         query = select(OnpremEnvironment).where(
