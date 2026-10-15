@@ -1,8 +1,35 @@
-.onprem-register { display: grid; gap: 16px; }
-.onprem-register label { display: grid; gap: 8px; }
-.onprem-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
-.onprem-list .selected { border-color: var(--accent, #765be7); }
-.onprem-command { padding: 16px; border: 1px solid #dedce6; border-radius: 8px; margin: 16px 0; }
-.onprem-command pre { overflow-x: auto; white-space: pre; max-width: 100%; font-size: 12px; }
-.onprem-page > .panel { min-width: 0; }
-.onprem-page details { margin-top: 16px; }
+.onprem-register {
+  display: grid;
+  gap: 16px;
+}
+.onprem-register label {
+  display: grid;
+  gap: 8px;
+}
+.onprem-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.onprem-list .selected {
+  border-color: var(--accent, #765be7);
+}
+.onprem-command {
+  padding: 16px;
+  border: 1px solid #dedce6;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+.onprem-command pre {
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 100%;
+  font-size: 12px;
+}
+.onprem-page > .panel {
+  min-width: 0;
+}
+.onprem-page details {
+  margin-top: 16px;
+}

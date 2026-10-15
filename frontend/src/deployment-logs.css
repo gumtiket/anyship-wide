@@ -1,17 +1,97 @@
-.deployment-logs{margin-top:18px;min-width:0}
-.deployment-log-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:9px;font-size:12px}
-.deployment-log-toolbar strong span{font-weight:400;color:#62666c;margin-left:6px}
-.deployment-log-toolbar button{min-height:30px}
-.deployment-log-scroll{height:320px;max-height:60vh;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable;border:1px solid #d8dee7;border-radius:7px;background:#f8fafc;padding:0 14px}
-.deployment-log-scroll:focus-visible{outline:2px solid #73777e;outline-offset:2px}
-.deployment-log-list{padding:0;list-style:none;margin:0}
-.deployment-log-list li{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #e5e9ef}
-.deployment-log-list li:last-child{border-bottom:0}
-.deployment-log-step{border-radius:5px;background:#e9edf3;color:#455469;padding:4px 7px;font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
-.deployment-log-list li>div{min-width:0;flex:1}
-.deployment-log-list strong{font-size:12px;overflow-wrap:anywhere}
-.deployment-log-list p{margin:4px 0 0;font:12px/1.7 Consolas,'Malgun Gothic',monospace;color:#535d6c;white-space:pre-wrap;overflow-wrap:anywhere}
-.deployment-log-list .is-error p,.deployment-log-list .is-error .deployment-log-level{color:#b42318}
-.deployment-log-list .is-warn p,.deployment-log-list .is-warn .deployment-log-level{color:#815600}
-.deployment-log-level{font-size:10px;margin-left:8px;font-weight:600}
-.deployment-logs .deployment-log-follow{font-size:11px;line-height:1.7;color:#62666c;margin:8px 0 0}
+.deployment-logs {
+  margin-top: 18px;
+  min-width: 0;
+}
+.deployment-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+  font-size: 12px;
+}
+.deployment-log-toolbar strong span {
+  font-weight: 400;
+  color: #62666c;
+  margin-left: 6px;
+}
+.deployment-log-toolbar button {
+  min-height: 30px;
+}
+.deployment-log-scroll {
+  height: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid #d8dee7;
+  border-radius: 7px;
+  background: #f8fafc;
+  padding: 0 14px;
+}
+.deployment-log-scroll:focus-visible {
+  outline: 2px solid #73777e;
+  outline-offset: 2px;
+}
+.deployment-log-list {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+.deployment-log-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e9ef;
+}
+.deployment-log-list li:last-child {
+  border-bottom: 0;
+}
+.deployment-log-step {
+  border-radius: 5px;
+  background: #e9edf3;
+  color: #455469;
+  padding: 4px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.deployment-log-list li > div {
+  min-width: 0;
+  flex: 1;
+}
+.deployment-log-list strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.deployment-log-list p {
+  margin: 4px 0 0;
+  font:
+    12px/1.7 Consolas,
+    'Malgun Gothic',
+    monospace;
+  color: #535d6c;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.deployment-log-list .is-error p,
+.deployment-log-list .is-error .deployment-log-level {
+  color: #b42318;
+}
+.deployment-log-list .is-warn p,
+.deployment-log-list .is-warn .deployment-log-level {
+  color: #815600;
+}
+.deployment-log-level {
+  font-size: 10px;
+  margin-left: 8px;
+  font-weight: 600;
+}
+.deployment-logs .deployment-log-follow {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #62666c;
+  margin: 8px 0 0;
+}

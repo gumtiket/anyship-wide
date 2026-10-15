@@ -1,5 +1,87 @@
-.migrate-environment{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;width:100%}.migrate-environment>label{flex:1;min-width:200px;font-size:12px;font-weight:600;display:flex;flex-direction:column;gap:8px}.migrate-environment select{width:100%;min-height:42px;border:1px solid #dfe2e6;background:#fff;border-radius:7px;padding:9px 11px;font:inherit;color:inherit}.migrate-none{font-size:12px}.migrate-dialog ol{margin:6px 0 14px;padding-left:20px;font-size:13px;line-height:1.8}.migrate-dialog .migrate-limits{padding:12px 14px;border:1px solid #ead9b0;border-radius:8px;background:#fffaf0;color:#6b5314}
-.migrate-dialog .migrate-ack{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:13px;font-weight:600;min-width:0;margin:10px 0 0;min-height:44px;cursor:pointer}
-.migrate-dialog .migrate-ack input[type="checkbox"]{flex:0 0 16px;width:16px;height:16px;min-height:0;margin:0;padding:0;accent-color:#242526;cursor:pointer}
-.migrate-dialog .migrate-ack input:disabled{cursor:not-allowed}
-.migrate-previous{width:100%;padding:14px 16px;border:1px solid #ead9b0;border-radius:8px;background:#fffaf0;font-size:12px;line-height:1.8;color:#5b4710}.migrate-previous strong{display:block;font-size:13px}.migrate-previous .deploy-url{font-weight:500}.migrate-previous-actions{margin-top:10px}
+.migrate-environment {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.migrate-environment > label {
+  flex: 1;
+  min-width: 200px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.migrate-environment select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #dfe2e6;
+  background: #fff;
+  border-radius: 7px;
+  padding: 9px 11px;
+  font: inherit;
+  color: inherit;
+}
+.migrate-none {
+  font-size: 12px;
+}
+.migrate-dialog ol {
+  margin: 6px 0 14px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.migrate-dialog .migrate-limits {
+  padding: 12px 14px;
+  border: 1px solid #ead9b0;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #6b5314;
+}
+.migrate-dialog .migrate-ack {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  margin: 10px 0 0;
+  min-height: 44px;
+  cursor: pointer;
+}
+.migrate-dialog .migrate-ack input[type='checkbox'] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: #242526;
+  cursor: pointer;
+}
+.migrate-dialog .migrate-ack input:disabled {
+  cursor: not-allowed;
+}
+.migrate-previous {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #ead9b0;
+  border-radius: 8px;
+  background: #fffaf0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #5b4710;
+}
+.migrate-previous strong {
+  display: block;
+  font-size: 13px;
+}
+.migrate-previous .deploy-url {
+  font-weight: 500;
+}
+.migrate-previous-actions {
+  margin-top: 10px;
+}

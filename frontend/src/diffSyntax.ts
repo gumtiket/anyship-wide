@@ -12,15 +12,46 @@ import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import type { FileDiff } from './unifiedDiff';
 
-const highlighter = createLowlight({ bash, css, dockerfile, ini, javascript, json, python, typescript, xml, yaml });
+const highlighter = createLowlight({
+  bash,
+  css,
+  dockerfile,
+  ini,
+  javascript,
+  json,
+  python,
+  typescript,
+  xml,
+  yaml,
+});
 const extensions: Record<string, string> = {
-  py: 'python', pyw: 'python', pyi: 'python',
-  js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
-  ts: 'typescript', tsx: 'typescript', mts: 'typescript', cts: 'typescript',
-  json: 'json', jsonc: 'json', yml: 'yaml', yaml: 'yaml',
-  html: 'xml', htm: 'xml', xml: 'xml', svg: 'xml', css: 'css',
-  sh: 'bash', bash: 'bash', zsh: 'bash', env: 'bash',
-  ini: 'ini', toml: 'ini', dockerfile: 'dockerfile',
+  py: 'python',
+  pyw: 'python',
+  pyi: 'python',
+  js: 'javascript',
+  jsx: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
+  json: 'json',
+  jsonc: 'json',
+  yml: 'yaml',
+  yaml: 'yaml',
+  html: 'xml',
+  htm: 'xml',
+  xml: 'xml',
+  svg: 'xml',
+  css: 'css',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  env: 'bash',
+  ini: 'ini',
+  toml: 'ini',
+  dockerfile: 'dockerfile',
 };
 
 export type CodeToken = { text: string; className: string };
@@ -41,7 +72,7 @@ function highlightLines(language: string, code: string): CodeToken[][] {
     if (node.type === 'element') {
       const ownClasses = node.properties.className;
       const nested = Array.isArray(ownClasses) ? [...classes, ...ownClasses.map(String)] : classes;
-      node.children.forEach(child => visit(child, nested));
+      node.children.forEach((child) => visit(child, nested));
     } else if (node.type === 'text') {
       const parts = node.value.split('\n');
       parts.forEach((text, index) => {
@@ -50,35 +81,46 @@ function highlightLines(language: string, code: string): CodeToken[][] {
       });
     }
   }
-  tree.children.forEach(node => visit(node));
+  tree.children.forEach((node) => visit(node));
   return lines;
 }
 
 export function highlightDiff(file: FileDiff): HighlightedDiff | null {
   const language = diffLanguage(file.path);
-  // Highlighting is optional: keep large/minified patches responsive and readable.
-  if (!language || file.lines.length > 1000 || file.lines.some(line => line.text.length > 2000)
-    || file.lines.reduce((size, line) => size + line.text.length, 0) > 50_000) return null;
+  // 강조는 선택 사항이다. 크거나 압축된 패치는 응답성과 가독성을 위해 강조하지 않는다.
+  if (
+    !language ||
+    file.lines.length > 1000 ||
+    file.lines.some((line) => line.text.length > 2000) ||
+    file.lines.reduce((size, line) => size + line.text.length, 0) > 50_000
+  )
+    return null;
   const result: HighlightedDiff = new Array(file.lines.length);
   let previous: number[] = [];
   let next: number[] = [];
   function flush() {
-    // Highlight both versions separately so deleted strings/comments do not leak
-    // into the new code. Shared context uses the new version's token colors.
+    // 삭제된 문자열·주석의 상태가 새 코드로 번지지 않도록 두 버전을 따로 강조한다.
+    // 공통 문맥 줄은 새 버전의 토큰 색을 쓴다.
     for (const indices of [previous, next]) {
       if (!indices.length) continue;
-      const source = indices.map(index => file.lines[index].text);
+      const source = indices.map((index) => file.lines[index].text);
       const tokens = highlightLines(language!, source.join('\n'));
-      if (tokens.length !== source.length || tokens.some((line, index) => line.map(token => token.text).join('') !== source[index])) {
+      if (
+        tokens.length !== source.length ||
+        tokens.some((line, index) => line.map((token) => token.text).join('') !== source[index])
+      ) {
         throw new Error('Highlighting changed source text');
       }
-      indices.forEach((index, offset) => { result[index] = tokens[offset]; });
+      indices.forEach((index, offset) => {
+        result[index] = tokens[offset];
+      });
     }
-    previous = []; next = [];
+    previous = [];
+    next = [];
   }
   try {
     file.lines.forEach((line, index) => {
-      // The diff omits code between hunks: never carry lexical state across gaps.
+      // diff는 hunk 사이의 코드를 생략하므로, 빈 구간을 건너 어휘 상태를 이어 가지 않는다.
       if (line.kind === 'hunk') flush();
       if (line.kind === 'context' || line.kind === 'deletion') previous.push(index);
       if (line.kind === 'context' || line.kind === 'addition') next.push(index);

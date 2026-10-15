@@ -1,24 +1,133 @@
-.connection-steps{display:flex;list-style:none;padding:0;margin:0 0 28px;gap:30px;color:#85888d;font-size:12px;flex-wrap:wrap}
-.connection-steps li{display:flex;align-items:center;gap:8px}
-.connection-steps li>span{display:grid;place-items:center;width:25px;height:25px;border:1px solid #d7d9dc;border-radius:50%;font-size:11px}
-.connection-steps .current{color:#202124;font-weight:650}
-.connection-steps .current>span{background:#242526;color:#fff;border-color:#242526}
-.connection-steps .done{color:#45484d}
-.connection-steps .done>span{background:#e4e5e7;border-color:#e4e5e7}
-.resume-note{display:flex;align-items:center;gap:9px;border-left:3px solid #aaaeb3;padding:10px 14px;background:#eeeff1;font-size:12px;border-radius:0 6px 6px 0}
-.connection-result{margin-top:24px;padding:20px;background:#f6f7f8;border:1px solid #e4e5e7;border-radius:9px}
-.connection-result-title{display:flex;align-items:center;gap:9px;color:#383b40}
-.connection-result-title svg{flex-shrink:0}
-.connection-result-title h3{margin:0;font-size:14px;line-height:1.6}
-.connection-result>p{font-size:12px;margin:12px 0 16px}
-.connection-result .helper{font-size:11px;margin-bottom:0}
-.repository-name{display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}
-.repository-name strong{color:#242526}
-.repository-name span{font-size:11px}
-.connection-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:20px}
-.connection-actions .secondary{font-size:11px;padding:10px 12px}
-.connection-privacy{display:flex;align-items:flex-start;gap:11px;margin:26px 0;color:#73777e}
-.connection-privacy svg{flex-shrink:0;margin-top:3px}
-.connection-privacy p{font-size:11px;margin:0;line-height:1.9}
-.selection-empty p{text-align:center}
-@media(max-width:650px){.connection-steps{gap:12px;font-size:10px}.connection-result{padding:16px}.connection-actions{gap:14px}}
+.connection-steps {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px;
+  gap: 30px;
+  color: #85888d;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.connection-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.connection-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid #d7d9dc;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.connection-steps .current {
+  color: #202124;
+  font-weight: 650;
+}
+.connection-steps .current > span {
+  background: #242526;
+  color: #fff;
+  border-color: #242526;
+}
+.connection-steps .done {
+  color: #45484d;
+}
+.connection-steps .done > span {
+  background: #e4e5e7;
+  border-color: #e4e5e7;
+}
+.resume-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-left: 3px solid #aaaeb3;
+  padding: 10px 14px;
+  background: #eeeff1;
+  font-size: 12px;
+  border-radius: 0 6px 6px 0;
+}
+.connection-result {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f6f7f8;
+  border: 1px solid #e4e5e7;
+  border-radius: 9px;
+}
+.connection-result-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #383b40;
+}
+.connection-result-title svg {
+  flex-shrink: 0;
+}
+.connection-result-title h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.connection-result > p {
+  font-size: 12px;
+  margin: 12px 0 16px;
+}
+.connection-result .helper {
+  font-size: 11px;
+  margin-bottom: 0;
+}
+.repository-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.repository-name strong {
+  color: #242526;
+}
+.repository-name span {
+  font-size: 11px;
+}
+.connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.connection-actions .secondary {
+  font-size: 11px;
+  padding: 10px 12px;
+}
+.connection-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 26px 0;
+  color: #73777e;
+}
+.connection-privacy svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.connection-privacy p {
+  font-size: 11px;
+  margin: 0;
+  line-height: 1.9;
+}
+.selection-empty p {
+  text-align: center;
+}
+@media (max-width: 650px) {
+  .connection-steps {
+    gap: 12px;
+    font-size: 10px;
+  }
+  .connection-result {
+    padding: 16px;
+  }
+  .connection-actions {
+    gap: 14px;
+  }
+}
