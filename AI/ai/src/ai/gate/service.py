@@ -325,14 +325,3 @@ def run_gate(
         f"게이트 결과: {report.status}; 현재 PR 승인 가능 표시는 false입니다.",
     )
     return report
-
-
-def run_gate_comparison(
-    ctx: BuildContext,
-    spec: DeploySpec,
-    runner: ContainerRunner,
-    log: LogFn,
-    *,
-    original_ctx: BuildContext,
-) -> GateReport:
-    return run_gate(ctx, spec, runner, log, original_ctx=original_ctx)

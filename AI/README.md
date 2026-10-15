@@ -46,7 +46,7 @@ P6까지 구현했다. 두 고정 샘플의 엄격 LLM replay·골든 회귀·�
 
 ## 팀 서비스 연결 상태
 
-팀의 `service/app/ai_contract.py`는 `analyze(AnalysisInput)`/`modify(ModificationInput)` Protocol을 정의한다. B의 현재 입력은 클론된 **로컬 레포 경로**이고 출력은 파일 7종이다. 지금 파일 추가만으로 웹 AI가 활성화되지 않는다. A가 코드 자료 제공, SHA/허용 경로/크기 검증, 항목별 변경과 검토·게시 경계를 연결해야 한다. 이 전달 작업에서는 서비스 코드를 수정하지 않는다.
+웹 서비스는 `service/app/ai_provider.py`가 `service/app/analysis_worker.py`를 별도 프로세스로 실행해 `run_analysis`를 호출하는 방식으로 연결되어 있다. 입력은 클론된 **로컬 레포 경로**이고 출력은 파일 7종이다. 설정과 동작은 [AI 통합 안내](../docs/AI_INTEGRATION.md)를 따른다.
 
 ## P6 오프라인 재현
 

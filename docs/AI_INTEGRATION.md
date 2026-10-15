@@ -68,7 +68,7 @@ Bedrock은 `BEDROCK_REGION`, `BEDROCK_MODEL_ID_STRONG`, `BEDROCK_MODEL_ID_FAST`�
 | `GET /api/projects/{id}/analyses/{run_id}` | 단계 로그, 엔진 결과, 파일·diff·검토 해시·게시 상태 |
 | `POST /api/projects/{id}/analyses/{run_id}/pr` | `{review_hash, approve_risky: boolean}`. 검토한 묶음을 Draft PR로 제출 |
 
-응답이 유실되면 같은 요청 ID 또는 같은 분석의 PR 요청을 재시도합니다. 실패한 분석을 다시 실행할 때는 새 요청 ID를 사용합니다. 기준 브랜치가 바뀌면 새 분석·재검토가 필요합니다. 기존 `/analysis`, `/changes` 경로는 placeholder 전용으로 유지합니다. `ai_contract.py`의 항목별 Protocol은 이 비동기 묶음 API에 사용하지 않습니다.
+응답이 유실되면 같은 요청 ID 또는 같은 분석의 PR 요청을 재시도합니다. 실패한 분석을 다시 실행할 때는 새 요청 ID를 사용합니다. 기준 브랜치가 바뀌면 새 분석·재검토가 필요합니다. 기존 `/analysis`, `/changes` 경로는 placeholder 전용으로 유지합니다.
 
 ## 검증
 
