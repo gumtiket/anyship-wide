@@ -45,7 +45,7 @@ AnyShip は、GitHub リポジトリの URL を入力すると、AI が 12-facto
 4. 変更案（diff）を確認して選択し、GitHub の Draft PR として提出します。
 5. マージしたコミットをイメージとしてビルドして環境にデプロイし、進行ログを画面で確認します。
 
-![AnyShip_Serviceflow.png](./docs/images/AnyShip_Serviceflow.png)
+![AnyShip_Serviceflow.ja.png](./docs/images/AnyShip_Serviceflow.ja.png)
 
 ---
 
