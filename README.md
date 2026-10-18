@@ -1,5 +1,7 @@
 # AnyShip-wide
 
+**한국어** | [日本語](README.ja.md)
+
 *AnyShip-wide*는 [anyship](https://github.com/gumtiket/anyship)을 임포트해 개인 개발을 이어가는 레포지토리임을 밝힘니다.
 
 
