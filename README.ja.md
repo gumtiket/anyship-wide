@@ -78,7 +78,7 @@ backing_services:
   - type: postgres
     bind_as: DATABASE_URL        # 環境に応じて RDS または Postgres コンテナを接続
 release:
-  migrate: alembic upgrade head  # デプロイごとに一回限りのジョブとして実行
+  migrate: alembic upgrade head  # デプロイごとに一回限りの作業として実行
 workload:                        # AI がセットを選ぶ根拠
   type: request-driven
   max_request_seconds: 10
